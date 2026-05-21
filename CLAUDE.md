@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 go build ./...                          # build all binaries
 go build -o lapis ./cmd/lapis           # build lapis binary
 go test ./...                           # run all tests
-go test ./internal/strip/...            # run tests for one package
+go test ./internal/strip/               # run tests for one package
 go test -run TestName ./internal/strip/ # run a single test
 GOOS=windows GOARCH=amd64 go build -o lapis.exe ./cmd/lapis  # cross-compile
 ```
@@ -27,8 +27,10 @@ GOOS=windows GOARCH=amd64 go build -o lapis.exe ./cmd/lapis  # cross-compile
 cmd/lapis/main.go       ← CLI entry point, flag parsing, orchestration (flag stdlib only)
 cmd/indigo/main.go      ← placeholder only, prints "not yet implemented"
 internal/strip/         ← JPEG segment stripping engine (core logic)
+  strip.go              ← public Strip() API, JPEG segment parser/writer, level dispatch
+  exif.go               ← EXIF IFD parser (resolves all values from offsets) + serializer
 internal/rename/        ← filename scrambling (scramble, uuid)
-internal/timestamp/     ← filesystem + EXIF timestamp editing
+internal/timestamp/     ← filesystem timestamp editing
 ```
 
 ### JPEG segment manipulation
@@ -47,11 +49,11 @@ All metadata work operates directly on the binary JPEG segment structure — no 
 
 | Level | Action |
 |-------|--------|
-| `scout` | Parse APP1, remove GPS IFD tags only. Remove IPTC location fields from APP13 if present. |
-| `journalist` | Excise APP13 entirely. Rebuild APP1 keeping only shooting data tags. Remove MakerNote, serials, owner/artist/copyright, software, ImageUniqueID, IFD1 (embedded thumbnail), all XMP APP1 segments. |
-| `ghost` | Excise APP1 and APP13 entirely. Print steganography warning to stderr. |
+| `scout` | Parse APP1, remove GPS IFD pointer (0x8825) from IFD0. IPTC location fields in APP13 are a pending TODO. |
+| `journalist` | Excise APP13 entirely. Rebuild APP1 keeping only shooting data tags. Remove all XMP APP1 segments. IFD1 (thumbnail) is never emitted. |
+| `ghost` | Excise all APP1 and APP13 segments. Print steganography warning to stderr. |
 
-Ghost level warning (print to stderr exactly):
+Ghost level warning (exact text, printed to stderr):
 ```
 WARNING: Pixel-level steganographic fingerprints are not addressed by --level ghost.
          Camera manufacturers (Canon, Nikon, Fuji) may embed invisible identifying
@@ -60,55 +62,64 @@ WARNING: Pixel-level steganographic fingerprints are not addressed by --level gh
 
 **Tags preserved at journalist level:** ExposureTime, FNumber, ISOSpeedRatings, ApertureValue, ExposureBiasValue, MaxApertureValue, Flash, FocalLength, FocalLengthIn35mmFilm, ImageWidth, ImageLength, ColorSpace, DateTimeOriginal.
 
-### XMP padding trick
+### EXIF IFD parser and serializer (`internal/strip/exif.go`)
 
-When modifying XMP content (not excising it), if the cleaned result is shorter than the original, pad with whitespace inside the XML to preserve segment length. This avoids rewriting all subsequent JPEG segment offsets.
+`parseEXIF` reads all IFD entries and resolves their values from TIFF data offsets into `[]byte`. Sub-IFDs (Exif, GPS) are followed and stored separately. IFD1 (thumbnail) is intentionally skipped at all levels — its entries reference raw thumbnail bytes by offset that cannot be safely relocated without specialized handling.
+
+`buildEXIF` serializes IFD0 + optional Exif sub-IFD + optional GPS sub-IFD with freshly computed offsets. Layout: TIFF header | IFD0 | ExifSub | GPSSub | external value data. Sub-IFD pointer entries (0x8769, 0x8825) in IFD0 must be present as placeholder entries; `buildEXIF` patches their values.
+
+Tags 0xA005 (Interoperability IFD) and 0x014A (SubIFDs) are stripped at scout level because their values are TIFF offsets that cannot be rewritten safely during rebuild.
 
 ### Output behaviour
 
 - Default: write to `_lapis/` subdirectory alongside input. Never modify originals unless `--in-place` is passed.
 - If output file already exists, append `_1`, `_2` etc. — never overwrite.
 - If input is a directory: process all `.jpg`/`.jpeg` (case-insensitive). With `--recursive`, mirror directory structure inside `_lapis/`.
-- Validate output is a parseable JPEG before writing.
 - Non-JPEG files: print warning and skip, do not abort batch.
 - End summary: `Processed: N  Skipped: N  Errors: N`
 
 ### Filename scrambling
 
-- `scramble`: 8-char lowercase hex string (e.g. `a3f9c2d1.jpg`) — use `crypto/rand`
-- `uuid`: UUID4 (e.g. `550e8400-e29b-41d4-a716-446655440000.jpg`) — implement directly with `crypto/rand`, 16 random bytes with version bits `0100` in byte 6 and variant bits `10` in byte 8. Do not import a UUID library.
+- `scramble`: 8-char lowercase hex string (e.g. `a3f9c2d1.jpg`) — `crypto/rand`, 4 bytes formatted as `%08x`
+- `uuid`: UUID4 — 16 `crypto/rand` bytes, version bits `0100` in byte 6, variant bits `10` in byte 8. No UUID library.
 
 ### Timestamp editing
 
-- `--time-random`: random `time.Time` between 2015-01-01 and 2023-12-31 (configurable via `--time-range-start` / `--time-range-end`)
-- `--time-shift`: one random offset per batch run (±365 days), same offset applied to all files to preserve relative order
-- `--time-now`: `time.Now()`
+The `--time` flag takes a value: `random`, `shift`, or `now`.
 
-Apply to both filesystem timestamps (`os.Chtimes` for mtime/atime) and surviving EXIF DateTime fields. Windows creation time: use `syscall.CreateFileW` + `SetFileTime` behind `//go:build windows`. Document honestly that Linux `ctime` cannot be set from userspace.
+- `random`: random `time.Time` between configurable range (default 2015-01-01 to 2023-12-31) via `os.Chtimes`
+- `shift`: one random offset per batch (±365 days) stored in `Options.Shift *time.Duration`, reused across all files to preserve relative ordering
+- `now`: `time.Now()`
+
+Currently applies to filesystem timestamps only (`os.Chtimes`). Applying to EXIF DateTime fields is a pending TODO.
+
+Windows creation time (`syscall.CreateFileW` + `SetFileTime` behind `//go:build windows`) is also a pending TODO.
 
 ## CLI flags
 
 ```
 lapis [options] <file|directory>
-  --level       scout | journalist | ghost  (default: journalist)
-  --rename      scramble | uuid            (default: none)
-  --time        random | shift | now       (default: none)
-  --time-range-start  YYYY-MM-DD           (default: 2015-01-01)
-  --time-range-end    YYYY-MM-DD           (default: 2023-12-31)
-  --in-place    modify files directly
-  --recursive   process subdirectories
-  --verbose     print per-file actions
-  --version     print version and exit
+  --level             scout | journalist | ghost  (default: journalist)
+  --rename            scramble | uuid            (default: none)
+  --time              random | shift | now       (default: none)
+  --time-range-start  YYYY-MM-DD                 (default: 2015-01-01)
+  --time-range-end    YYYY-MM-DD                 (default: 2023-12-31)
+  --in-place          modify files directly
+  --recursive         process subdirectories
+  --verbose           print per-file actions
+  --version           print version and exit
 ```
 
 ## Testing
 
-Tests for `internal/strip` must be table-driven and use synthetic test JPEGs generated in test setup (not real photos). Required cases:
-- Valid JPEG with GPS data → GPS tags removed at scout level
-- Valid JPEG → APP1 and APP13 fully absent after ghost level
+Tests live in `internal/strip/strip_test.go` (white-box, `package strip`) and `internal/rename/rename_test.go` (white-box, `package rename`). Synthetic JPEG fixtures are built from scratch using a `jpegBuilder` helper — no real photos.
+
+Required strip test cases (all passing):
+- Valid JPEG with GPS → GPS tags absent after `scout`
+- Valid JPEG → APP1 and APP13 absent after `ghost`
 - Non-JPEG file → graceful error, no output written
 - JPEG with no metadata → passes through without corruption
-- JPEG with embedded thumbnail in IFD1 → thumbnail removed at journalist level
+- JPEG with IFD1 thumbnail → thumbnail absent after `journalist`
 
 ## v1 scope boundary
 

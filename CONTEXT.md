@@ -1,0 +1,1 @@
+Cross-platform CLI tool written in Go for stripping identifying metadata (GPS, device IDs, timestamps, thumbnails) from JPEG image files, with adjustable paranoia levels for journalists and privacy-sensitive users.
