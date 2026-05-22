@@ -1,15 +1,13 @@
 {
   "folders": [
     {
-      "name": "Have Lapis CLI app",
+      "name": "lapis",
       "path": "./",
       "folder_exclude_patterns": [
-        "node_modules", ".github", ".git", ".vscode", ".idea",
-        "__pycache__", "pydevd_attach_to_process", "venv", ".phpintel", ".claude"
+        ".git", ".github", ".claude"
       ],
       "file_exclude_patterns": [
-        "npm-debug.log", ".keep", ".gitkeep", "all.min.css", "package-lock.json",
-        "*.min.js", "*.bak", "*.woff*", "*.sublime-workspace", "resume.sh"
+        "*.bak", "*.sublime-workspace"
       ],
       "binary_file_patterns": ["dist/*"]
     }
@@ -21,8 +19,28 @@
     "rulers": [80, 100],
     "highlight_line": true,
     "word_wrap": false,
-    "hightlight_modified_tabs": true,
+    "highlight_modified_tabs": true,
     "find_selected_text": true,
     "default_line_ending": "unix"
-  }
+  },
+  "build_systems": [
+    {
+      "name": "lapis: build",
+      "shell_cmd": "go build -o lapis ./cmd/lapis",
+      "working_dir": "${project_path}",
+      "file_regex": "^(.+\\.go):([0-9]+):([0-9]+):"
+    },
+    {
+      "name": "lapis: build all",
+      "shell_cmd": "go build ./...",
+      "working_dir": "${project_path}",
+      "file_regex": "^(.+\\.go):([0-9]+):([0-9]+):"
+    },
+    {
+      "name": "lapis: test",
+      "shell_cmd": "go test ./...",
+      "working_dir": "${project_path}",
+      "file_regex": "^(.+\\.go):([0-9]+):([0-9]+):"
+    }
+  ]
 }

@@ -100,6 +100,12 @@ lapis --level journalist --recursive ./archive
 
 ---
 
+## Website
+
+[lapis.elkarrde.codeberg.page](https://lapis.elkarrde.codeberg.page) — source at [codeberg.org/elkarrde/lapis-web](https://codeberg.org/elkarrde/lapis-web) (Hugo)
+
+---
+
 ## Companion tools
 
 **`indigo`** *(planned, v2)* — No-options binary. Hardcoded to ghost stripping + UUID filename + random timestamps. One command, no decisions. For field use when options are a liability.
