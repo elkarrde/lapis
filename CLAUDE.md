@@ -51,7 +51,7 @@ All metadata work operates directly on the binary JPEG segment structure — no 
 |-------|--------|
 | `scout` | Parse APP1, remove GPS IFD pointer (0x8825) from IFD0. IPTC location fields in APP13 are a pending TODO. |
 | `journalist` | Excise APP13 entirely. Rebuild APP1 keeping only shooting data tags. Remove all XMP APP1 segments. IFD1 (thumbnail) is never emitted. |
-| `ghost` | Excise all APP1 and APP13 segments. Print steganography warning to stderr. |
+| `ghost` | Drop all non-structural segments: keep only APP0 (`0xFFE0`), SOF (`0xFFC0`–`0xFFCF`, excluding `0xFFC4`/`0xFFC8`), DHT (`0xFFC4`), DQT (`0xFFDB`), DRI (`0xFFDD`), SOS/SOI/EOI/RST. Everything else — APP1–APP15, COM (`0xFFFE`), vendor segments — is excised. Print steganography warning to stderr. |
 
 Ghost level warning (exact text, printed to stderr):
 ```
