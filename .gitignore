@@ -39,3 +39,6 @@ go.work.sum
 # Releases
 dist/lapis*
 dist/indigo*
+
+# Testing dataset
+testdata/*
