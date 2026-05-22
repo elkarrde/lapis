@@ -1,4 +1,8 @@
-# lapis
+<p align="center">
+  <img src="lapis-logo.svg" width="64" height="64" alt="lapis logo">
+</p>
+
+# Lapis
 
 CLI tool for stripping identifying metadata from photos and image files.
 

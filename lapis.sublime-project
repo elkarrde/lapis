@@ -1,7 +1,7 @@
 {
   "folders": [
     {
-      "name": "Have Lapis",
+      "name": "Have Lapis CLI app",
       "path": "./",
       "folder_exclude_patterns": [
         "node_modules", ".github", ".git", ".vscode", ".idea",
@@ -9,9 +9,9 @@
       ],
       "file_exclude_patterns": [
         "npm-debug.log", ".keep", ".gitkeep", "all.min.css", "package-lock.json",
-        "*.min.js", "*.bak", "*.svg", "*.woff*", "*.sublime-workspace", "resume.sh"
+        "*.min.js", "*.bak", "*.woff*", "*.sublime-workspace", "resume.sh"
       ],
-      "binary_file_patterns": []
+      "binary_file_patterns": ["dist/*"]
     }
   ],
   "settings": {
