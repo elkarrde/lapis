@@ -31,7 +31,7 @@ Sharing a photo without stripping this data can expose your location, your equip
 
 **`journalist`** — Strip GPS, device identifiers, serial numbers, owner/artist/copyright fields, software fingerprints, unique image IDs, embedded thumbnail, XMP and IPTC blocks. Keep shooting data: shutter speed, aperture, ISO, focal length, exposure compensation, capture time, dimensions, colour space.
 
-**`ghost`** — Strip everything. Excise EXIF and IPTC segments entirely, rebuild a clean file structure without re-encoding pixel data. Warns about steganographic fingerprints (see below).
+**`ghost`** — Strip everything addressable. Drop all non-structural segments: APP1–APP15, COM, and any vendor-specific blocks. Keep only APP0 (JFIF), SOF, DHT, DQT, DRI, and pixel data markers. Rebuilds a clean file structure without re-encoding pixel data. Warns about steganographic fingerprints (see below).
 
 ---
 

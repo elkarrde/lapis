@@ -13,7 +13,7 @@
 - [x] `scout` level: remove GPS IFD pointer from APP1
 - [ ] `scout` level: remove IPTC location fields from APP13 (requires IPTC parser — deferred)
 - [x] `journalist` level: excise APP13 entirely; rebuild APP1 retaining only shooting data tags; remove XMP APP1 segments; remove IFD1 (embedded thumbnail)
-- [x] `ghost` level: excise all APP1 and APP13 segments; print steganography warning to stderr
+- [ ] `ghost` level: drop ALL non-structural segments (APP1–APP15, COM `0xFFFE`, vendor); keep only APP0, SOF, DHT, DQT, DRI, SOS/SOI/EOI/RST; print steganography warning to stderr
 - [ ] Output validation: verify result is a parseable JPEG before writing
 - [x] Write to `_lapis/` subdirectory by default; `--in-place` flag to modify originals
 - [x] Collision avoidance: append `_1`, `_2` etc. if output filename already exists
@@ -40,7 +40,7 @@
 
 ### Tests (`internal/strip`)
 - [x] Valid JPEG with GPS data → GPS tags absent after `scout`
-- [x] Valid JPEG → APP1 and APP13 fully absent after `ghost`
+- [ ] Valid JPEG → only structural segments remain after `ghost` (APP1–APP15, COM all absent)
 - [x] Non-JPEG file → graceful error, no output written
 - [x] JPEG with no metadata → passes through without corruption
 - [x] JPEG with embedded IFD1 thumbnail → thumbnail absent after `journalist`
