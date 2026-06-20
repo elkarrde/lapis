@@ -19,11 +19,17 @@ GOOS=windows GOARCH=amd64 go build -o lapis.exe ./cmd/lapis  # cross-compile
 
 ## Module
 
-`codeberg.org/elkarrde/lapis` — Go 1.22+. `go.mod` must have **zero `require` entries**. No external dependencies. Pure standard library only.
+`codeberg.org/elkarrde/lapis` — Go 1.22+. The binding rule is **no run-time dependencies**: a built `lapis` must be a single self-contained executable that needs nothing but itself (no installs, shared libs, or external tools). Today lapis meets this by shipping pure standard library only, so `go.mod` currently has **zero `require` entries** — a clean proxy for the goal, but not the goal itself.
 
-The underlying intent of "no deps" is **no deps to *run***: lapis must be a single self-contained executable that needs nothing but itself (no installs, shared libs, or external tools). **Development/build-time dependencies are fair game** — "no deps" is not about `go.mod` purity for its own sake. The "zero `require` entries" rule above is a stricter proxy lapis keeps today; adopting a pure-Go module that statically links into the same one-file binary (see exifscalpel note below) preserves the run-time goal even though it adds a `require`.
+What the rule covers, by phase:
 
-> **Heads-up (see [`EXIFSCALPEL.md`](EXIFSCALPEL.md)):** a shared first-party library `exifscalpel` is being built from lapis's own `internal/strip` (segment + EXIF engine) plus tidy-exif's XMP code. The "zero deps" rule above exists to keep lapis a **single self-contained executable** — and adopting a pure-Go module like exifscalpel preserves that (it statically links into the same one-file binary). Adopting it would only add a `go.mod require` (kept offline via vendoring or a `replace` directive), so it's a build-setup choice, not a break of the single-binary goal. No action needed now: exifscalpel has no code yet.
+- **Run time (what users get) — the only hard constraint.** The shipped binary stays one file with no external deps, and any code statically linked into it must carry a license that does not restrict a user's use case.
+- **Build / development — fair game.** Build- and dev-time tooling is fine provided its license doesn't restrict *our* development or distribution. A pure-Go module that statically links into the same one-file binary (see exifscalpel note below) preserves the run-time goal even though it adds a `require`.
+- **Testing / cross-checking — unrestricted.** Comparing lapis output against other tools or libraries (exiftool, goexif, etc.) is fine: we're verifying, not reusing or redistributing their code, so their licenses don't bind us.
+
+> **Heads-up (see [`EXIFSCALPEL.md`](EXIFSCALPEL.md)):** a shared first-party library `exifscalpel` is being built from lapis's own `internal/strip` (segment + EXIF engine) plus tidy-exif's XMP code. The "zero deps" rule above exists to keep lapis a **single self-contained executable** — and adopting a pure-Go module like exifscalpel preserves that (it statically links into the same one-file binary). Adopting it would only add a `go.mod require` (kept offline via vendoring or a `replace` directive), so it's a build-setup choice, not a break of the single-binary goal.
+>
+> **License:** lapis is **MPL-2.0** (see [`LICENSE`](LICENSE); every `.go` file carries the `SPDX-License-Identifier: MPL-2.0` + Exhibit A header), and so is exifscalpel — so the whole metadata engine sits under one consistent license. MPL is *file-level* copyleft: its reciprocity covers each MPL source file (modifications must stay open under MPL), not a user's photos, their use of the tool, or proprietary files someone might add alongside. This satisfies the run-time rule above (a user's use case is never restricted) and the build/development rule (MPL doesn't restrict our development or distribution). Because lapis and exifscalpel share the license, the packages lapis contributes upstream (`jpeg`, `exif`) move between repos without any relicensing friction. No action needed now: exifscalpel has no code yet.
 
 ## Architecture
 
@@ -47,7 +53,7 @@ All metadata work operates directly on the binary JPEG segment structure — no 
 - `SOI` (`0xFFD8`) / `EOI` (`0xFFD9`): always preserve
 - `SOS`, `SOF`, `DHT`, `DQT`: pixel data segments — copy verbatim, never modify
 
-**Do not use `goexif` or any third-party EXIF library** — they are read-only and would add a dependency. Raw byte operations only.
+**Do not link `goexif` or any third-party EXIF library into the binary** — they are read-only and would add a run-time dependency. The shipped engine uses raw byte operations only. (Using such a library in *tests* to cross-check output is fine — see the Module section.)
 
 ### Stripping levels
 
@@ -127,4 +133,4 @@ Required strip test cases (all passing):
 
 ## v1 scope boundary
 
-Do not build in v1: mimic filename mode, `--time-set` flag, RAW/PNG/TIFF support, audit/dry-run mode, actual `indigo` logic, `goindigo`, any third-party dependency, GUI/TUI/interactive prompts.
+Do not build in v1: mimic filename mode, `--time-set` flag, RAW/PNG/TIFF support, audit/dry-run mode, actual `indigo` logic, `goindigo`, any third-party run-time dependency, GUI/TUI/interactive prompts.

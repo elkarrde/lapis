@@ -143,4 +143,6 @@ GOOS=darwin  GOARCH=arm64 go build -o lapis-mac ./cmd/lapis
 
 ## License
 
-See [LICENSE](LICENSE).
+lapis is licensed under the **Mozilla Public License 2.0 (MPL-2.0)**. See [LICENSE](LICENSE).
+
+This places no restriction on using the tool: clean as many photos as you like, for any purpose, including commercial. MPL's file-level copyleft only applies if you modify and redistribute lapis's own source files — those modifications must stay open under MPL.
