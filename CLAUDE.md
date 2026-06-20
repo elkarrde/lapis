@@ -21,6 +21,10 @@ GOOS=windows GOARCH=amd64 go build -o lapis.exe ./cmd/lapis  # cross-compile
 
 `codeberg.org/elkarrde/lapis` — Go 1.22+. `go.mod` must have **zero `require` entries**. No external dependencies. Pure standard library only.
 
+The underlying intent of "no deps" is **no deps to *run***: lapis must be a single self-contained executable that needs nothing but itself (no installs, shared libs, or external tools). **Development/build-time dependencies are fair game** — "no deps" is not about `go.mod` purity for its own sake. The "zero `require` entries" rule above is a stricter proxy lapis keeps today; adopting a pure-Go module that statically links into the same one-file binary (see exifscalpel note below) preserves the run-time goal even though it adds a `require`.
+
+> **Heads-up (see [`EXIFSCALPEL.md`](EXIFSCALPEL.md)):** a shared first-party library `exifscalpel` is being built from lapis's own `internal/strip` (segment + EXIF engine) plus tidy-exif's XMP code. The "zero deps" rule above exists to keep lapis a **single self-contained executable** — and adopting a pure-Go module like exifscalpel preserves that (it statically links into the same one-file binary). Adopting it would only add a `go.mod require` (kept offline via vendoring or a `replace` directive), so it's a build-setup choice, not a break of the single-binary goal. No action needed now: exifscalpel has no code yet.
+
 ## Architecture
 
 ```
