@@ -9,6 +9,7 @@ package strip
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,26 +19,33 @@ import (
 type Level int
 
 const (
-	LevelScout      Level = iota + 1 // GPS and location data only
-	LevelJournalist                  // all identifying metadata; keep shooting data
-	LevelGhost                       // excise all EXIF and IPTC segments entirely
+	LevelNoGPS     Level = iota + 1 // GPS and location data only
+	LevelNoCamera                   // all identifying metadata; keep shooting data
+	LevelClean                      // excise all EXIF and IPTC segments entirely
+	LevelReencoded                  // clean + pixel rework (planned; not yet implemented)
 )
 
-const ghostWarning = `WARNING: Pixel-level steganographic fingerprints are not addressed by --level ghost.
+// ErrReencodeNotImplemented is returned when the reencoded level is requested.
+// Pixel-level rework is planned future work (goindigo) and is not yet available.
+var ErrReencodeNotImplemented = errors.New("reencoded level not yet implemented: pixel rework is planned (goindigo)")
+
+const cleanWarning = `WARNING: Pixel-level steganographic fingerprints are not addressed by --level clean.
          Camera manufacturers (Canon, Nikon, Fuji) may embed invisible identifying
-         patterns in image data. Use goindigo (planned) for full mitigation.`
+         patterns in image data. Use --level reencoded (planned) for full mitigation.`
 
 // ParseLevel converts a string flag value to a Level.
 func ParseLevel(s string) (Level, error) {
 	switch s {
-	case "scout":
-		return LevelScout, nil
-	case "journalist":
-		return LevelJournalist, nil
-	case "ghost":
-		return LevelGhost, nil
+	case "no-gps":
+		return LevelNoGPS, nil
+	case "no-camera":
+		return LevelNoCamera, nil
+	case "clean":
+		return LevelClean, nil
+	case "reencoded":
+		return LevelReencoded, nil
 	default:
-		return 0, fmt.Errorf("unknown level %q: must be scout, journalist, or ghost", s)
+		return 0, fmt.Errorf("unknown level %q: must be no-gps, no-camera, clean, or reencoded", s)
 	}
 }
 
@@ -156,8 +164,13 @@ func processSegments(segs []jpegSeg, level Level) ([]jpegSeg, error) {
 	var out []jpegSeg
 	switch level {
 
-	case LevelGhost:
-		fmt.Fprintln(os.Stderr, ghostWarning)
+	case LevelReencoded:
+		// Pixel rework is planned future work (goindigo); refuse rather than
+		// emit a file that misleadingly implies pixels were touched.
+		return nil, ErrReencodeNotImplemented
+
+	case LevelClean:
+		fmt.Fprintln(os.Stderr, cleanWarning)
 		for _, s := range segs {
 			// drop APP1 (EXIF and XMP) and APP13 (IPTC)
 			if s.marker == 0xE1 || s.marker == 0xED {
@@ -166,13 +179,13 @@ func processSegments(segs []jpegSeg, level Level) ([]jpegSeg, error) {
 			out = append(out, s)
 		}
 
-	case LevelJournalist:
+	case LevelNoCamera:
 		for _, s := range segs {
 			switch {
 			case s.marker == 0xED: // APP13 / IPTC — excise entirely
 			case isXMPSeg(s): // XMP APP1 — excise
 			case isExifSeg(s):
-				newData, err := processJournalistEXIF(s.data)
+				newData, err := processNoCameraEXIF(s.data)
 				if err == nil {
 					out = append(out, jpegSeg{marker: 0xE1, data: newData})
 				}
@@ -182,10 +195,10 @@ func processSegments(segs []jpegSeg, level Level) ([]jpegSeg, error) {
 			}
 		}
 
-	case LevelScout:
+	case LevelNoGPS:
 		for _, s := range segs {
 			if isExifSeg(s) {
-				newData, err := processScoutEXIF(s.data)
+				newData, err := processNoGPSEXIF(s.data)
 				if err != nil {
 					out = append(out, s) // best-effort: keep original on parse failure
 				} else {

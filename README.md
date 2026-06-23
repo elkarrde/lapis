@@ -27,11 +27,13 @@ Sharing a photo without stripping this data can expose your location, your equip
 
 ## Stripping levels
 
-**`scout`** — Strip GPS and location data only. Keep everything else: camera model, lens, shooting data.
+**`no-gps`** — Strip GPS and location data only. Keep everything else: camera model, lens, shooting data.
 
-**`journalist`** — Strip GPS, device identifiers, serial numbers, owner/artist/copyright fields, software fingerprints, unique image IDs, embedded thumbnail, XMP and IPTC blocks. Keep shooting data: shutter speed, aperture, ISO, focal length, exposure compensation, capture time, dimensions, colour space.
+**`no-camera`** *(default)* — Strip GPS, device identifiers, serial numbers, owner/artist/copyright fields, software fingerprints, unique image IDs, embedded thumbnail, XMP and IPTC blocks. Keep shooting data: shutter speed, aperture, ISO, focal length, exposure compensation, capture time, dimensions, colour space.
 
-**`ghost`** — Strip everything addressable. Drop all non-structural segments: APP1–APP15, COM, and any vendor-specific blocks. Keep only APP0 (JFIF), SOF, DHT, DQT, DRI, and pixel data markers. Rebuilds a clean file structure without re-encoding pixel data. Warns about steganographic fingerprints (see below).
+**`clean`** — Strip everything addressable. Drop all non-structural segments: APP1–APP15, COM, and any vendor-specific blocks. Keep only APP0 (JFIF), SOF, DHT, DQT, DRI, and pixel data markers. Rebuilds a clean file structure without re-encoding pixel data. Warns about steganographic fingerprints (see below).
+
+**`reencoded`** *(planned)* — Everything `clean` does, plus reworking the pixel data itself to defeat pixel-level fingerprints (the future `goindigo` engine). Not yet implemented: selecting it (via `--level reencoded` or the `--reencode` shorthand) exits with an error rather than writing a file.
 
 ---
 
@@ -41,7 +43,8 @@ Sharing a photo without stripping this data can expose your location, your equip
 lapis [options] <file|directory>
 
 Options:
-  --level       scout | journalist | ghost   (default: journalist)
+  --level       no-gps | no-camera | clean | reencoded   (default: no-camera)
+  --reencode    shorthand for --level reencoded (planned; not yet implemented)
   --rename      scramble | uuid             (default: none, keep original filename)
   --time        random | shift | now        (default: none, keep original timestamps)
   --time-range-start  YYYY-MM-DD            (default: 2015-01-01)
@@ -58,16 +61,16 @@ By default, processed files are written to a `_lapis/` subdirectory alongside th
 
 ```sh
 # Strip GPS only, keep original filename
-lapis --level scout image.jpg
+lapis --level no-gps image.jpg
 
-# Full journalist strip on a folder
-lapis --level journalist ./photos
+# Full no-camera strip on a folder
+lapis --level no-camera ./photos
 
-# Maximum anonymisation: ghost strip, UUID filename, randomised timestamps
-lapis --level ghost --rename uuid --time random ./photos
+# Maximum anonymisation: clean strip, UUID filename, randomised timestamps
+lapis --level clean --rename uuid --time random ./photos
 
 # Process subdirectories, mirror structure in _lapis/
-lapis --level journalist --recursive ./archive
+lapis --level no-camera --recursive ./archive
 ```
 
 ---
@@ -94,9 +97,9 @@ lapis --level journalist --recursive ./archive
 
 ## A note on steganographic fingerprints
 
-`--level ghost` addresses all addressable metadata. Some camera manufacturers (Canon, Nikon, Fuji) embed near-invisible identifying patterns directly in pixel data. These survive metadata stripping and cannot be removed without re-encoding the image.
+`--level clean` addresses all addressable metadata. Some camera manufacturers (Canon, Nikon, Fuji) embed near-invisible identifying patterns directly in pixel data. These survive metadata stripping and cannot be removed without re-encoding the image.
 
-`goindigo` (planned, v3) will perform a full JPEG re-encode to mitigate pixel-level fingerprints.
+`--level reencoded` (planned, the `goindigo` engine, v3) will perform a full JPEG re-encode to mitigate pixel-level fingerprints.
 
 ---
 
@@ -108,7 +111,7 @@ lapis --level journalist --recursive ./archive
 
 ## Companion tools
 
-**`indigo`** *(planned, v2)* — No-options binary. Hardcoded to ghost stripping + UUID filename + random timestamps. One command, no decisions. For field use when options are a liability.
+**`indigo`** *(planned, v2)* — No-options binary. Hardcoded to clean stripping + UUID filename + random timestamps. One command, no decisions. For field use when options are a liability.
 
 **`goindigo`** *(planned, v3)* — Full JPEG re-encode to scrub pixel-level steganographic fingerprints that survive metadata stripping.
 
@@ -134,10 +137,10 @@ GOOS=darwin  GOARCH=arm64 go build -o lapis-mac ./cmd/lapis
 
 | Version | Scope |
 |---------|-------|
-| **v1** | JPEG stripping levels 1–3, filename scramble + UUID, timestamp random/shift/now, batch directory processing, Linux binary |
+| **v1** | JPEG stripping levels (`no-gps`, `no-camera`, `clean`), filename scramble + UUID, timestamp random/shift/now, batch directory processing, Linux binary |
 | **v1.5** | Filename mimic mode (Sony/Canon/Nikon/Fuji/Olympus schemas), `--time-set`, Windows + macOS binaries |
 | **v2** | RAW support (CR2/ARW/NEF/DNG), PNG + TIFF, audit/dry-run mode, `indigo` companion binary |
-| **v3** | `goindigo` — full JPEG re-encode, steganography mitigation |
+| **v3** | `--level reencoded` (`goindigo` engine) — full JPEG re-encode, steganography mitigation |
 
 ---
 

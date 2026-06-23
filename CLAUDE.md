@@ -57,20 +57,23 @@ All metadata work operates directly on the binary JPEG segment structure — no 
 
 ### Stripping levels
 
-| Level | Action |
-|-------|--------|
-| `scout` | Parse APP1, remove GPS IFD pointer (0x8825) from IFD0. IPTC location fields in APP13 are a pending TODO. |
-| `journalist` | Excise APP13 entirely. Rebuild APP1 keeping only shooting data tags. Remove all XMP APP1 segments. IFD1 (thumbnail) is never emitted. |
-| `ghost` | Drop all non-structural segments: keep only APP0 (`0xFFE0`), SOF (`0xFFC0`–`0xFFCF`, excluding `0xFFC4`/`0xFFC8`), DHT (`0xFFC4`), DQT (`0xFFDB`), DRI (`0xFFDD`), SOS/SOI/EOI/RST. Everything else — APP1–APP15, COM (`0xFFFE`), vendor segments — is excised. Print steganography warning to stderr. |
+| Level | Constant | Action |
+|-------|----------|--------|
+| `no-gps` | `LevelNoGPS` | Parse APP1, remove GPS IFD pointer (0x8825) from IFD0. IPTC location fields in APP13 are a pending TODO. |
+| `no-camera` | `LevelNoCamera` | Excise APP13 entirely. Rebuild APP1 keeping only shooting data tags. Remove all XMP APP1 segments. IFD1 (thumbnail) is never emitted. |
+| `clean` | `LevelClean` | Drop all non-structural segments: keep only APP0 (`0xFFE0`), SOF (`0xFFC0`–`0xFFCF`, excluding `0xFFC4`/`0xFFC8`), DHT (`0xFFC4`), DQT (`0xFFDB`), DRI (`0xFFDD`), SOS/SOI/EOI/RST. Everything else — APP1–APP15, COM (`0xFFFE`), vendor segments — is excised. Print steganography warning to stderr. |
+| `reencoded` | `LevelReencoded` | **Planned, not yet implemented.** Intended to do everything `clean` does plus rework pixel data to defeat pixel-level fingerprints (future `goindigo`). Today `Strip` returns `ErrReencodeNotImplemented` and the CLI exits non-zero before touching any file. Selectable via `--level reencoded` or the `--reencode` shorthand. |
 
-Ghost level warning (exact text, printed to stderr):
+Note: `no-camera` (formerly `journalist`) is the **default** level.
+
+Clean level warning (exact text, printed to stderr):
 ```
-WARNING: Pixel-level steganographic fingerprints are not addressed by --level ghost.
+WARNING: Pixel-level steganographic fingerprints are not addressed by --level clean.
          Camera manufacturers (Canon, Nikon, Fuji) may embed invisible identifying
-         patterns in image data. Use goindigo (planned) for full mitigation.
+         patterns in image data. Use --level reencoded (planned) for full mitigation.
 ```
 
-**Tags preserved at journalist level:** ExposureTime, FNumber, ISOSpeedRatings, ApertureValue, ExposureBiasValue, MaxApertureValue, Flash, FocalLength, FocalLengthIn35mmFilm, ImageWidth, ImageLength, ColorSpace, DateTimeOriginal.
+**Tags preserved at no-camera level:** ExposureTime, FNumber, ISOSpeedRatings, ApertureValue, ExposureBiasValue, MaxApertureValue, Flash, FocalLength, FocalLengthIn35mmFilm, ImageWidth, ImageLength, ColorSpace, DateTimeOriginal.
 
 ### EXIF IFD parser and serializer (`internal/strip/exif.go`)
 
@@ -78,7 +81,7 @@ WARNING: Pixel-level steganographic fingerprints are not addressed by --level gh
 
 `buildEXIF` serializes IFD0 + optional Exif sub-IFD + optional GPS sub-IFD with freshly computed offsets. Layout: TIFF header | IFD0 | ExifSub | GPSSub | external value data. Sub-IFD pointer entries (0x8769, 0x8825) in IFD0 must be present as placeholder entries; `buildEXIF` patches their values.
 
-Tags 0xA005 (Interoperability IFD) and 0x014A (SubIFDs) are stripped at scout level because their values are TIFF offsets that cannot be rewritten safely during rebuild.
+Tags 0xA005 (Interoperability IFD) and 0x014A (SubIFDs) are stripped at no-gps level because their values are TIFF offsets that cannot be rewritten safely during rebuild.
 
 ### Output behaviour
 
@@ -109,7 +112,8 @@ Windows creation time (`syscall.CreateFileW` + `SetFileTime` behind `//go:build 
 
 ```
 lapis [options] <file|directory>
-  --level             scout | journalist | ghost  (default: journalist)
+  --level             no-gps | no-camera | clean | reencoded  (default: no-camera)
+  --reencode          shorthand for --level reencoded (planned; not yet implemented)
   --rename            scramble | uuid            (default: none)
   --time              random | shift | now       (default: none)
   --time-range-start  YYYY-MM-DD                 (default: 2015-01-01)
@@ -125,11 +129,12 @@ lapis [options] <file|directory>
 Tests live in `internal/strip/strip_test.go` (white-box, `package strip`) and `internal/rename/rename_test.go` (white-box, `package rename`). Synthetic JPEG fixtures are built from scratch using a `jpegBuilder` helper — no real photos.
 
 Required strip test cases (all passing):
-- Valid JPEG with GPS → GPS tags absent after `scout`
-- Valid JPEG → APP1 and APP13 absent after `ghost`
+- Valid JPEG with GPS → GPS tags absent after `no-gps`
+- Valid JPEG → APP1 and APP13 absent after `clean`
 - Non-JPEG file → graceful error, no output written
 - JPEG with no metadata → passes through without corruption
-- JPEG with IFD1 thumbnail → thumbnail absent after `journalist`
+- JPEG with IFD1 thumbnail → thumbnail absent after `no-camera`
+- `reencoded` level → `Strip` returns `ErrReencodeNotImplemented`, no output written
 
 ## v1 scope boundary
 

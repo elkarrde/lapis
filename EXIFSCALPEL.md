@@ -42,6 +42,6 @@ if/when lapis adopts exifscalpel.
 ## What to do now
 
 **Nothing in the code.** exifscalpel has no Go yet. Do **not** start removing
-`internal/strip`. Keep building lapis v1 (ghost level, etc.) as planned. The migration
+`internal/strip`. Keep building lapis v1 (clean level, etc.) as planned. The migration
 is decoupled — lapis can adopt exifscalpel later, independently of tidy-exif, and only
 after the dependency decision above is made.

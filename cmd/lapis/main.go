@@ -23,7 +23,8 @@ import (
 const version = "0.1.0"
 
 func main() {
-	level := flag.String("level", "journalist", "stripping level: scout | journalist | ghost")
+	level := flag.String("level", "no-camera", "stripping level: no-gps | no-camera | clean | reencoded")
+	reencode := flag.Bool("reencode", false, "shorthand for --level reencoded (pixel rework; planned)")
 	ren := flag.String("rename", "", "filename scrambling: scramble | uuid")
 	tim := flag.String("time", "", "timestamp mode: random | shift | now")
 	timeStart := flag.String("time-range-start", "2015-01-01", "start of random time range (YYYY-MM-DD)")
@@ -46,9 +47,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	// --reencode is shorthand for --level reencoded.
+	if *reencode {
+		*level = "reencoded"
+	}
+
 	stripLevel, err := strip.ParseLevel(*level)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "lapis: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Pixel rework is planned (goindigo); refuse before touching any files.
+	if stripLevel == strip.LevelReencoded {
+		fmt.Fprintln(os.Stderr, "lapis: --level reencoded not yet implemented")
 		os.Exit(1)
 	}
 

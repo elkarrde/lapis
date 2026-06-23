@@ -302,14 +302,14 @@ func buildEXIF(bo binary.ByteOrder, ifd0, exifSub, gpsSub []ifdEntry) []byte {
 
 // ---- Level-specific EXIF processors ----
 
-// Journalist: keep only shooting data, nothing identifying.
-var journalistIFD0Keep = map[uint16]bool{
+// no-camera: keep only shooting data, nothing identifying.
+var noCameraIFD0Keep = map[uint16]bool{
 	0x0100: true, // ImageWidth
 	0x0101: true, // ImageLength
 	// 0x8769 ExifIFD pointer added below if needed
 }
 
-var journalistExifSubKeep = map[uint16]bool{
+var noCameraExifSubKeep = map[uint16]bool{
 	0x829A: true, // ExposureTime
 	0x829D: true, // FNumber
 	0x8827: true, // ISOSpeedRatings
@@ -323,14 +323,14 @@ var journalistExifSubKeep = map[uint16]bool{
 	0xA405: true, // FocalLengthIn35mmFilm
 }
 
-func processJournalistEXIF(data []byte) ([]byte, error) {
+func processNoCameraEXIF(data []byte) ([]byte, error) {
 	p, err := parseEXIF(data)
 	if err != nil {
 		return nil, err
 	}
 
-	ifd0 := filterKeep(p.ifd0, journalistIFD0Keep)
-	exifSub := filterKeep(p.exifSub, journalistExifSubKeep)
+	ifd0 := filterKeep(p.ifd0, noCameraIFD0Keep)
+	exifSub := filterKeep(p.exifSub, noCameraExifSubKeep)
 
 	if len(exifSub) > 0 {
 		ifd0 = append(ifd0, ptrEntry(0x8769))
@@ -341,21 +341,21 @@ func processJournalistEXIF(data []byte) ([]byte, error) {
 	return buildEXIF(p.bo, ifd0, exifSub, nil), nil
 }
 
-// Scout: remove GPS sub-IFD and any other unresolvable pointer sub-IFDs.
+// no-gps: remove GPS sub-IFD and any other unresolvable pointer sub-IFDs.
 // All other IFD0 and Exif sub-IFD data is preserved.
-var scoutIFD0Remove = map[uint16]bool{
+var noGPSIFD0Remove = map[uint16]bool{
 	0x8825: true, // GPSIFD pointer — drops all GPS data
 	0xA005: true, // Interoperability IFD — pointer cannot be safely rewritten
 	0x014A: true, // SubIFDs — same
 }
 
-func processScoutEXIF(data []byte) ([]byte, error) {
+func processNoGPSEXIF(data []byte) ([]byte, error) {
 	p, err := parseEXIF(data)
 	if err != nil {
 		return nil, err
 	}
 
-	ifd0 := filterRemove(p.ifd0, scoutIFD0Remove)
+	ifd0 := filterRemove(p.ifd0, noGPSIFD0Remove)
 	// 0x8769 in ifd0 has a stale offset; buildEXIF patches it from the computed layout.
 	sortByTag(ifd0)
 

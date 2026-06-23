@@ -10,10 +10,11 @@
 ### `internal/strip` — JPEG segment stripping engine
 - [x] JPEG segment parser (walk `0xFF` markers, extract type + length + payload)
 - [x] EXIF IFD tag reader (IFD0, GPS sub-IFD, Exif sub-IFD) supporting both byte orders
-- [x] `scout` level: remove GPS IFD pointer from APP1
-- [ ] `scout` level: remove IPTC location fields from APP13 (requires IPTC parser — deferred)
-- [x] `journalist` level: excise APP13 entirely; rebuild APP1 retaining only shooting data tags; remove XMP APP1 segments; remove IFD1 (embedded thumbnail)
-- [ ] `ghost` level: drop ALL non-structural segments (APP1–APP15, COM `0xFFFE`, vendor); keep only APP0, SOF, DHT, DQT, DRI, SOS/SOI/EOI/RST; print steganography warning to stderr
+- [x] `no-gps` level: remove GPS IFD pointer from APP1
+- [ ] `no-gps` level: remove IPTC location fields from APP13 (requires IPTC parser — deferred)
+- [x] `no-camera` level: excise APP13 entirely; rebuild APP1 retaining only shooting data tags; remove XMP APP1 segments; remove IFD1 (embedded thumbnail)
+- [ ] `clean` level: drop ALL non-structural segments (APP1–APP15, COM `0xFFFE`, vendor); keep only APP0, SOF, DHT, DQT, DRI, SOS/SOI/EOI/RST; print steganography warning to stderr
+- [ ] `reencoded` level: rework pixel data (full JPEG re-encode) to defeat pixel-level fingerprints — `goindigo` engine (v3). Placeholder added: `--level reencoded` / `--reencode` currently returns `ErrReencodeNotImplemented`.
 - [ ] Output validation: verify result is a parseable JPEG before writing
 - [x] Write to `_lapis/` subdirectory by default; `--in-place` flag to modify originals
 - [x] Collision avoidance: append `_1`, `_2` etc. if output filename already exists
@@ -39,11 +40,12 @@
 - [x] End-of-run summary: `Processed: N  Skipped: N  Errors: N`
 
 ### Tests (`internal/strip`)
-- [x] Valid JPEG with GPS data → GPS tags absent after `scout`
-- [ ] Valid JPEG → only structural segments remain after `ghost` (APP1–APP15, COM all absent)
+- [x] Valid JPEG with GPS data → GPS tags absent after `no-gps`
+- [ ] Valid JPEG → only structural segments remain after `clean` (APP1–APP15, COM all absent)
 - [x] Non-JPEG file → graceful error, no output written
 - [x] JPEG with no metadata → passes through without corruption
-- [x] JPEG with embedded IFD1 thumbnail → thumbnail absent after `journalist`
+- [x] JPEG with embedded IFD1 thumbnail → thumbnail absent after `no-camera`
+- [x] `reencoded` level → `Strip` returns `ErrReencodeNotImplemented`, no output written
 - [x] Synthetic test JPEG generator (used by test setup, not real photos)
 
 ---
@@ -65,12 +67,12 @@
 - [ ] PNG support
 - [ ] TIFF support
 - [ ] Audit / dry-run mode: report what would be stripped without writing output
-- [ ] `indigo` companion binary: no-options, hardcoded ghost + UUID + time-random
+- [ ] `indigo` companion binary: no-options, hardcoded clean + UUID + time-random
 
 ---
 
 ## v3
 
-- [ ] `goindigo`: full JPEG re-encode to scrub pixel-level steganographic fingerprints
+- [ ] `goindigo` (`--level reencoded`): full JPEG re-encode to scrub pixel-level steganographic fingerprints
 - [ ] Quality option for re-encode
 - [ ] Lossless option for re-encode

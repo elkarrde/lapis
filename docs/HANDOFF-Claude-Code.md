@@ -71,11 +71,11 @@ Operate directly on JPEG binary segment structure. A JPEG file is a sequence of 
 - `APP1` (`0xFFE1`) — contains EXIF data (and sometimes XMP)
 - `APP13` (`0xFFED`) — contains IPTC/Photoshop data
 - `APP2` (`0xFFE2`) — ICC profile (keep for now, may revisit)
-- All other `APPn` segments (`0xFFE0`–`0xFFEF`) except `APP0` (JFIF marker, keep) — strip on ghost level
+- All other `APPn` segments (`0xFFE0`–`0xFFEF`) except `APP0` (JFIF marker, keep) — strip on clean level
 
 **Three stripping levels:**
 
-`scout` — parse APP1, locate and remove GPS-related EXIF tags only. Tags to remove:
+`no-gps` — parse APP1, locate and remove GPS-related EXIF tags only. Tags to remove:
 - `0x0001` GPSLatitudeRef
 - `0x0002` GPSLatitude
 - `0x0003` GPSLongitudeRef
@@ -93,7 +93,7 @@ Operate directly on JPEG binary segment structure. A JPEG file is a sequence of 
 - `0x001F` GPSHPositioningError
 - Also remove IPTC location fields if APP13 is present
 
-`journalist` — excise APP13 entirely. Parse APP1/EXIF and remove the following tag groups, rebuilding the segment with only shooting data remaining:
+`no-camera` — excise APP13 entirely. Parse APP1/EXIF and remove the following tag groups, rebuilding the segment with only shooting data remaining:
 - All GPS IFD tags (as above)
 - `0x013B` Artist
 - `0x8298` Copyright
@@ -111,9 +111,9 @@ Operate directly on JPEG binary segment structure. A JPEG file is a sequence of 
 
 Keep: `0x829A` ExposureTime, `0x829D` FNumber, `0x8827` ISOSpeedRatings, `0x9202` ApertureValue, `0x9204` ExposureBiasValue, `0x9205` MaxApertureValue, `0x9209` Flash, `0x920A` FocalLength, `0xA405` FocalLengthIn35mmFilm, `0x0100` ImageWidth, `0x0101` ImageLength, `0xA001` ColorSpace, `0x9003` DateTimeOriginal
 
-`ghost` — excise APP1 and APP13 segments entirely. Rebuild the JPEG by copying all non-APP1/APP13 segments verbatim. Print a warning to stderr:
+`clean` — excise APP1 and APP13 segments entirely. Rebuild the JPEG by copying all non-APP1/APP13 segments verbatim. Print a warning to stderr:
 ```
-WARNING: Pixel-level steganographic fingerprints are not addressed by --level ghost.
+WARNING: Pixel-level steganographic fingerprints are not addressed by --level clean.
          Camera manufacturers (Canon, Nikon, Fuji) may embed invisible identifying
          patterns in image data. Use goindigo (planned) for full mitigation.
 ```
@@ -144,7 +144,7 @@ Document in output that `ctime` on Linux cannot be set via userspace and will re
 - `--time-shift` — generate one random offset duration (between -365 days and +365 days) per batch run; apply the same offset to all files so relative ordering is preserved
 - `--time-now` — use `time.Now()`
 
-Apply chosen timestamp to both filesystem mtime/atime AND any EXIF DateTime fields that survive stripping (i.e. on scout/journalist levels where DateTime tags are kept, update them to match).
+Apply chosen timestamp to both filesystem mtime/atime AND any EXIF DateTime fields that survive stripping (i.e. on no-gps/no-camera levels where DateTime tags are kept, update them to match).
 
 ---
 
@@ -156,7 +156,7 @@ Use Go's `flag` standard library. No third-party CLI frameworks.
 lapis [options] <file|directory>
 
 Options:
-  --level       scout | journalist | ghost  (default: journalist)
+  --level       no-gps | no-camera | clean  (default: no-camera)
   --rename      scramble | uuid             (default: none, keep original)
   --time        random | shift | now        (default: none, keep original)
   --time-range-start  YYYY-MM-DD            (default: 2015-01-01)
@@ -189,11 +189,11 @@ package main
 
 // indigo is planned for v2.
 // It will be a no-options wrapper around the lapis engine with hardcoded
-// ghost stripping, uuid renaming, and random timestamps.
+// clean stripping, uuid renaming, and random timestamps.
 // No flags. No configuration. Maximum paranoia, minimum ceremony.
 
 func main() {
-    println("indigo is not yet implemented. Use lapis --level ghost for now.")
+    println("indigo is not yet implemented. Use lapis --level clean for now.")
 }
 ```
 
@@ -215,11 +215,11 @@ func main() {
 ## Testing
 
 Write table-driven tests for the strip engine (`internal/strip`). Test cases must include:
-- A valid JPEG with GPS data — verify GPS tags removed at scout level
-- A valid JPEG — verify APP1 and APP13 fully absent after ghost level
+- A valid JPEG with GPS data — verify GPS tags removed at no-gps level
+- A valid JPEG — verify APP1 and APP13 fully absent after clean level
 - A file that is not a JPEG — verify graceful error, no output written
 - A JPEG with no metadata — verify it passes through cleanly without corruption
-- A JPEG with an embedded thumbnail in IFD1 — verify thumbnail removed at journalist level
+- A JPEG with an embedded thumbnail in IFD1 — verify thumbnail removed at no-camera level
 
 Use small synthetic test JPEGs generated in the test setup, not real photos.
 
@@ -233,11 +233,11 @@ Use Go 1.22 or later. Module name: `codeberg.org/elkarrde/lapis`. `go.mod` must 
 
 ## Definition of done for v1
 
-- `lapis --level ghost --rename uuid --time random ./testfolder` processes a folder of JPEGs, writes sanitised copies to `./testfolder/_lapis/`, all with UUID filenames and randomised timestamps
-- `lapis --level scout image.jpg` removes only GPS data, leaves all other metadata intact
-- `lapis --level journalist image.jpg` produces a file with no identifying tags but intact shooting data
+- `lapis --level clean --rename uuid --time random ./testfolder` processes a folder of JPEGs, writes sanitised copies to `./testfolder/_lapis/`, all with UUID filenames and randomised timestamps
+- `lapis --level no-gps image.jpg` removes only GPS data, leaves all other metadata intact
+- `lapis --level no-camera image.jpg` produces a file with no identifying tags but intact shooting data
 - Binary compiles and runs on Linux with no installed dependencies
 - All tests pass
-- Ghost level prints the steganography warning to stderr
+- Clean level prints the steganography warning to stderr
 
 *Handoff prepared: May 2026*

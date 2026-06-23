@@ -13,8 +13,11 @@
 
 ## Notes
 
-`scout` and `journalist` strip levels are implemented and tested. Outstanding for
-a complete **v1** (see `TODO.md`): the `ghost` level, IPTC location stripping for
-`scout`, applying timestamps to surviving EXIF fields, Windows creation-time
-editing, and the `ghost`/output-validation tests. Shippable as an MVP today;
-finish `ghost` before claiming v1. macOS binary is v1.5.
+`no-gps` and `no-camera` strip levels are implemented and tested. Outstanding for
+a complete **v1** (see `TODO.md`): the `clean` level, IPTC location stripping for
+`no-gps`, applying timestamps to surviving EXIF fields, Windows creation-time
+editing, and the `clean`/output-validation tests. Shippable as an MVP today;
+finish `clean` before claiming v1. macOS binary is v1.5. (The `reencoded` level —
+pixel rework, the `goindigo` engine — is a v3 placeholder that errors today.)
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full history of changes.

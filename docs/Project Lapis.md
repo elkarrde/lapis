@@ -26,14 +26,14 @@ Sharing a photo taken on a DSLR, drone, or phone without stripping this data can
 
 ## Adjustable paranoia levels
 
-**Level 1 — `scout`**
+**Level 1 — `no-gps`**
 Strip GPS and location data only. Keep everything else including camera model, lens, shooting data.
 
-**Level 2 — `journalist`**
+**Level 2 — `no-camera`**
 Strip GPS, device identifiers, serial numbers, owner/artist/copyright fields, software fingerprints, unique image IDs, embedded thumbnail, XMP and IPTC blocks entirely.
 Keep: shutter speed, aperture, ISO, focal length, exposure compensation, original capture time, dimensions, color space.
 
-**Level 3 — `ghost`**
+**Level 3 — `clean`**
 Strip everything. Excise APP1/APP13 JPEG segments entirely, rebuild clean file structure. Does not re-encode pixel data. Warns explicitly about steganographic fingerprints and directs to `goindigo` for full mitigation.
 
 ---
@@ -65,7 +65,7 @@ Two separate layers:
 
 **EXIF timestamps** (inside the file)
 - `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`
-- Ghost level: stripped entirely
+- Clean level: stripped entirely
 - Other levels: optionally randomized or shifted
 
 **Filesystem timestamps** (OS level)
@@ -83,7 +83,7 @@ Two separate layers:
 ## The companion tools
 
 **`indigo`** *(v2)*
-No-options binary. Maximum paranoia, no flags accepted. Hardcoded to: ghost metadata stripping + uuid filename + time-random. One command, done. For journalists in the field who should not have to think about options.
+No-options binary. Maximum paranoia, no flags accepted. Hardcoded to: clean metadata stripping + uuid filename + time-random. One command, done. For journalists in the field who should not have to think about options.
 
 Named after indigo dye — historically the cheaper, darker, plant-based substitute for lapis lazuli pigment. Same logic: blunter, no ceremony.
 

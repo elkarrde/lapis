@@ -9,6 +9,7 @@ package strip
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"testing"
 )
 
@@ -203,31 +204,31 @@ func hasMarker(data []byte, marker byte) bool {
 
 // ---- Tests ----
 
-func TestScout_RemovesGPS(t *testing.T) {
+func TestNoGPS_RemovesGPS(t *testing.T) {
 	input := jpegWithGPS(t)
-	out := stripTo(t, input, LevelScout)
+	out := stripTo(t, input, LevelNoGPS)
 
 	// Output must still be a valid JPEG with APP1
 	if !hasMarker(out, 0xE1) {
-		t.Fatal("scout: EXIF APP1 missing from output")
+		t.Fatal("no-gps: EXIF APP1 missing from output")
 	}
 
 	// Parse the output EXIF and verify GPS tags are gone
 	app1 := findSegment(out, 0xE1)
 	if app1 == nil {
-		t.Fatal("scout: could not find APP1")
+		t.Fatal("no-gps: could not find APP1")
 	}
 	p, err := parseEXIF(app1)
 	if err != nil {
-		t.Fatalf("scout: parseEXIF on output: %v", err)
+		t.Fatalf("no-gps: parseEXIF on output: %v", err)
 	}
 	for _, e := range p.ifd0 {
 		if e.tag == 0x8825 {
-			t.Error("scout: GPS IFD pointer still present in IFD0")
+			t.Error("no-gps: GPS IFD pointer still present in IFD0")
 		}
 	}
 	if len(p.gpsSub) > 0 {
-		t.Error("scout: GPS sub-IFD still present")
+		t.Error("no-gps: GPS sub-IFD still present")
 	}
 
 	// Make tag should be preserved
@@ -238,30 +239,30 @@ func TestScout_RemovesGPS(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("scout: Make tag unexpectedly removed")
+		t.Error("no-gps: Make tag unexpectedly removed")
 	}
 }
 
-func TestGhost_RemovesAllMetadataSegments(t *testing.T) {
+func TestClean_RemovesAllMetadataSegments(t *testing.T) {
 	input := jpegWithFullEXIF(t)
-	out := stripTo(t, input, LevelGhost)
+	out := stripTo(t, input, LevelClean)
 
 	if hasMarker(out, 0xE1) {
-		t.Error("ghost: APP1 segment still present")
+		t.Error("clean: APP1 segment still present")
 	}
 	if hasMarker(out, 0xED) {
-		t.Error("ghost: APP13 segment still present")
+		t.Error("clean: APP13 segment still present")
 	}
 	// APP0 (JFIF) should be kept
 	if !hasMarker(out, 0xE0) {
-		t.Error("ghost: APP0 unexpectedly removed")
+		t.Error("clean: APP0 unexpectedly removed")
 	}
 }
 
 func TestNonJPEG_GracefulError(t *testing.T) {
 	input := []byte("this is not a jpeg")
 	var out bytes.Buffer
-	err := Strip(bytes.NewReader(input), &out, LevelGhost)
+	err := Strip(bytes.NewReader(input), &out, LevelClean)
 	if err == nil {
 		t.Fatal("expected error for non-JPEG input, got nil")
 	}
@@ -270,9 +271,21 @@ func TestNonJPEG_GracefulError(t *testing.T) {
 	}
 }
 
+func TestReencoded_NotImplemented(t *testing.T) {
+	input := jpegWithFullEXIF(t)
+	var out bytes.Buffer
+	err := Strip(bytes.NewReader(input), &out, LevelReencoded)
+	if !errors.Is(err, ErrReencodeNotImplemented) {
+		t.Fatalf("reencoded: expected ErrReencodeNotImplemented, got %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("reencoded: expected no output, got %d bytes", out.Len())
+	}
+}
+
 func TestNoMetadata_PassesThroughClean(t *testing.T) {
 	input := jpegWithNoMetadata(t)
-	out := stripTo(t, input, LevelJournalist)
+	out := stripTo(t, input, LevelNoCamera)
 
 	// Must still be parseable
 	segs, _, err := parseJPEG(bytes.NewReader(out))
@@ -282,7 +295,7 @@ func TestNoMetadata_PassesThroughClean(t *testing.T) {
 	_ = segs
 }
 
-func TestJournalist_RemovesEmbeddedThumbnail(t *testing.T) {
+func TestNoCamera_RemovesEmbeddedThumbnail(t *testing.T) {
 	// Build EXIF with a Make tag and a simulated Exif sub-IFD.
 	// IFD1 (thumbnail) is parsed by parseEXIF but excluded from output.
 	// Since our buildEXIF already never emits IFD1, just verify the output
@@ -303,21 +316,21 @@ func TestJournalist_RemovesEmbeddedThumbnail(t *testing.T) {
 	b.add(0xC0, sof0())
 	input := b.bytes()
 
-	out := stripTo(t, input, LevelJournalist)
+	out := stripTo(t, input, LevelNoCamera)
 	app1 := findSegment(out, 0xE1)
 	if app1 == nil {
-		t.Fatal("journalist: EXIF APP1 missing")
+		t.Fatal("no-camera: EXIF APP1 missing")
 	}
 	p, err := parseEXIF(app1)
 	if err != nil {
-		t.Fatalf("journalist: parseEXIF on output: %v", err)
+		t.Fatalf("no-camera: parseEXIF on output: %v", err)
 	}
 
 	// IFD0 next pointer should be 0 (no IFD1)
 	// We verify indirectly: Make tag must be absent (not in journalist keep list)
 	for _, e := range p.ifd0 {
 		if e.tag == 0x010F {
-			t.Error("journalist: Make tag should have been removed")
+			t.Error("no-camera: Make tag should have been removed")
 		}
 	}
 	// ISO should be in Exif sub-IFD
@@ -328,6 +341,6 @@ func TestJournalist_RemovesEmbeddedThumbnail(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("journalist: ISO tag missing from output")
+		t.Error("no-camera: ISO tag missing from output")
 	}
 }
