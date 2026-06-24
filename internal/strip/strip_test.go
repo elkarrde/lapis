@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"testing"
+	"time"
 
 	"codeberg.org/elkarrde/exifscalpel/exif"
 	"codeberg.org/elkarrde/exifscalpel/jpeg"
@@ -122,15 +123,62 @@ func jpegWithFullEXIF(t *testing.T) []byte {
 	return b.bytes()
 }
 
+// jpegWithDateTimes builds a JPEG whose EXIF carries DateTime (IFD0) plus
+// DateTimeOriginal and DateTimeDigitized (Exif sub-IFD), all set to the same
+// original capture time.
+func jpegWithDateTimes(t *testing.T) []byte {
+	t.Helper()
+	dt := func(s string) []byte { return append([]byte(s), 0) } // ASCII + NUL
+	ifd0 := []exif.Entry{
+		{Tag: 0x010F, Type: 2, Count: 5, Value: []byte{'F', 'u', 'j', 'i', 0}}, // Make
+		{Tag: 0x0132, Type: 2, Count: 20, Value: dt("2019:07:01 12:00:00")},    // DateTime
+	}
+	exifSub := []exif.Entry{
+		{Tag: 0x9003, Type: 2, Count: 20, Value: dt("2019:07:01 12:00:00")}, // DateTimeOriginal
+		{Tag: 0x9004, Type: 2, Count: 20, Value: dt("2019:07:01 12:00:00")}, // DateTimeDigitized
+	}
+	exifData := buildEXIFPayload(t, binary.LittleEndian, ifd0, exifSub, nil)
+
+	var b jpegBuilder
+	b.add(0xE0, app0())
+	b.add(0xE1, exifData)
+	b.add(0xC0, sof0())
+	return b.bytes()
+}
+
 // ---- Helpers ----
 
 func stripTo(t *testing.T, input []byte, level Level) []byte {
 	t.Helper()
+	return stripToTime(t, input, level, nil)
+}
+
+func stripToTime(t *testing.T, input []byte, level Level, exifTime *time.Time) []byte {
+	t.Helper()
 	var out bytes.Buffer
-	if err := Strip(bytes.NewReader(input), &out, level); err != nil {
+	if err := Strip(bytes.NewReader(input), &out, level, exifTime); err != nil {
 		t.Fatalf("Strip: %v", err)
 	}
 	return out.Bytes()
+}
+
+// exifDateTime parses the output's APP1 EXIF and returns the NUL-trimmed value
+// of the given tag in the named IFD, plus whether it is present.
+func exifDateTime(t *testing.T, data []byte, id exif.IFDID, tag uint16) (string, bool) {
+	t.Helper()
+	app1 := findSegment(data, 0xE1)
+	if app1 == nil {
+		return "", false
+	}
+	d, err := exif.Parse(app1)
+	if err != nil {
+		t.Fatalf("exif.Parse on output: %v", err)
+	}
+	e, ok := d.Find(id, tag)
+	if !ok {
+		return "", false
+	}
+	return string(bytes.TrimRight(e.Value, "\x00")), true
 }
 
 func findSegment(data []byte, marker byte) []byte {
@@ -266,10 +314,57 @@ func TestStrip_OutputIsValidJPEG(t *testing.T) {
 	}
 }
 
+func TestTimestamp_RewritesSurvivingEXIFDateTimes(t *testing.T) {
+	input := jpegWithDateTimes(t)
+	ts := time.Date(2021, 3, 4, 9, 8, 7, 0, time.UTC)
+	const want = "2021:03:04 09:08:07"
+	const orig = "2019:07:01 12:00:00"
+
+	// no-gps keeps all three DateTime fields; each must be rewritten.
+	out := stripToTime(t, input, LevelNoGPS, &ts)
+	for _, tc := range []struct {
+		name string
+		id   exif.IFDID
+		tag  uint16
+	}{
+		{"DateTime", exif.IFD0, 0x0132},
+		{"DateTimeOriginal", exif.ExifIFD, 0x9003},
+		{"DateTimeDigitized", exif.ExifIFD, 0x9004},
+	} {
+		got, ok := exifDateTime(t, out, tc.id, tc.tag)
+		if !ok {
+			t.Errorf("no-gps: %s missing from output", tc.name)
+			continue
+		}
+		if got != want {
+			t.Errorf("no-gps: %s = %q, want %q", tc.name, got, want)
+		}
+	}
+
+	// no-camera keeps only DateTimeOriginal: it must be rewritten, and the rewrite
+	// must not reintroduce the two fields the level dropped.
+	out = stripToTime(t, input, LevelNoCamera, &ts)
+	if got, ok := exifDateTime(t, out, exif.ExifIFD, 0x9003); !ok || got != want {
+		t.Errorf("no-camera: DateTimeOriginal = %q (present=%v), want %q", got, ok, want)
+	}
+	if _, ok := exifDateTime(t, out, exif.IFD0, 0x0132); ok {
+		t.Error("no-camera: DateTime should have been dropped, not rewritten")
+	}
+	if _, ok := exifDateTime(t, out, exif.ExifIFD, 0x9004); ok {
+		t.Error("no-camera: DateTimeDigitized should have been dropped, not rewritten")
+	}
+
+	// A nil time leaves the original EXIF timestamp untouched.
+	out = stripToTime(t, input, LevelNoGPS, nil)
+	if got, _ := exifDateTime(t, out, exif.IFD0, 0x0132); got != orig {
+		t.Errorf("nil time: DateTime = %q, want original %q", got, orig)
+	}
+}
+
 func TestNonJPEG_GracefulError(t *testing.T) {
 	input := []byte("this is not a jpeg")
 	var out bytes.Buffer
-	err := Strip(bytes.NewReader(input), &out, LevelClean)
+	err := Strip(bytes.NewReader(input), &out, LevelClean, nil)
 	if err == nil {
 		t.Fatal("expected error for non-JPEG input, got nil")
 	}
@@ -281,7 +376,7 @@ func TestNonJPEG_GracefulError(t *testing.T) {
 func TestReencoded_NotImplemented(t *testing.T) {
 	input := jpegWithFullEXIF(t)
 	var out bytes.Buffer
-	err := Strip(bytes.NewReader(input), &out, LevelReencoded)
+	err := Strip(bytes.NewReader(input), &out, LevelReencoded, nil)
 	if !errors.Is(err, ErrReencodeNotImplemented) {
 		t.Fatalf("reencoded: expected ErrReencodeNotImplemented, got %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"codeberg.org/elkarrde/exifscalpel/jpeg"
 )
@@ -53,15 +54,21 @@ func ParseLevel(s string) (Level, error) {
 // Strip reads a JPEG from r, applies the given stripping level, and writes
 // the result to w. Returns an error if r is not a valid JPEG.
 //
+// If exifTime is non-nil, any EXIF DateTime field that survives the level's
+// filtering is rewritten to that time (DateTimeOriginal at no-camera; also
+// DateTime and DateTimeDigitized at no-gps). It is the caller's job to pass the
+// same value it applies to the filesystem timestamp. Pass nil to leave EXIF
+// times untouched.
+//
 // The byte-level segment parse/write and EXIF/XMP identification come from
 // codeberg.org/elkarrde/exifscalpel; this package keeps the stripping policy
 // (levels and the per-level segment processing in processSegments).
-func Strip(r io.Reader, w io.Writer, level Level) error {
+func Strip(r io.Reader, w io.Writer, level Level, exifTime *time.Time) error {
 	segs, tail, err := jpeg.Parse(r)
 	if err != nil {
 		return err
 	}
-	out, err := processSegments(segs, level)
+	out, err := processSegments(segs, level, exifTime)
 	if err != nil {
 		return err
 	}
@@ -81,7 +88,7 @@ func Strip(r io.Reader, w io.Writer, level Level) error {
 	return err
 }
 
-func processSegments(segs []jpeg.Segment, level Level) ([]jpeg.Segment, error) {
+func processSegments(segs []jpeg.Segment, level Level, exifTime *time.Time) ([]jpeg.Segment, error) {
 	var out []jpeg.Segment
 	switch level {
 
@@ -106,7 +113,7 @@ func processSegments(segs []jpeg.Segment, level Level) ([]jpeg.Segment, error) {
 			case s.Marker == 0xED: // APP13 / IPTC — excise entirely
 			case jpeg.IsXMP(s): // XMP APP1 — excise
 			case jpeg.IsEXIF(s):
-				newData, err := processNoCameraEXIF(s.Data)
+				newData, err := processNoCameraEXIF(s.Data, exifTime)
 				if err == nil {
 					out = append(out, jpeg.Segment{Marker: 0xE1, Data: newData})
 				}
@@ -119,7 +126,7 @@ func processSegments(segs []jpeg.Segment, level Level) ([]jpeg.Segment, error) {
 	case LevelNoGPS:
 		for _, s := range segs {
 			if jpeg.IsEXIF(s) {
-				newData, err := processNoGPSEXIF(s.Data)
+				newData, err := processNoGPSEXIF(s.Data, exifTime)
 				if err != nil {
 					out = append(out, s) // best-effort: keep original on parse failure
 				} else {

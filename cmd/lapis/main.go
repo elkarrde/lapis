@@ -199,13 +199,26 @@ func processFile(path, baseDir string, opts options) (bool, error) {
 		return false, err
 	}
 
+	// Pick the timestamp up front: the same value is rewritten into surviving
+	// EXIF DateTime fields during Strip and applied to the filesystem after the
+	// write, so the two never disagree.
+	var ts time.Time
+	var exifTime *time.Time
+	if opts.doTime {
+		ts, err = timestamp.Pick(opts.tsOpts, info.ModTime())
+		if err != nil {
+			return false, fmt.Errorf("timestamp: %w", err)
+		}
+		exifTime = &ts
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return false, err
 	}
 
 	var buf bytes.Buffer
-	stripErr := strip.Strip(f, &buf, opts.level)
+	stripErr := strip.Strip(f, &buf, opts.level, exifTime)
 	f.Close()
 	if stripErr != nil {
 		return false, stripErr
@@ -238,15 +251,6 @@ func processFile(path, baseDir string, opts options) (bool, error) {
 	}
 
 	outPath := collisionSafe(filepath.Join(outDir, outName))
-
-	// Determine timestamp before writing.
-	var ts time.Time
-	if opts.doTime {
-		ts, err = timestamp.Pick(opts.tsOpts, info.ModTime())
-		if err != nil {
-			return false, fmt.Errorf("timestamp: %w", err)
-		}
-	}
 
 	if opts.inPlace {
 		if err := os.WriteFile(outPath, buf.Bytes(), info.Mode()); err != nil {

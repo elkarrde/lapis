@@ -27,7 +27,7 @@
 - [x] `--time random`: random `time.Time` in configurable range, applied via `os.Chtimes`
 - [x] `--time shift`: single random offset per batch run, applied uniformly to preserve ordering
 - [x] `--time now`: set to `time.Now()`
-- [ ] Apply chosen timestamp to surviving EXIF DateTime fields (DateTimeOriginal etc.)
+- [x] Apply chosen timestamp to surviving EXIF DateTime fields (DateTimeOriginal etc.)
 - [ ] Windows creation time: `syscall.CreateFileW` + `SetFileTime` behind `//go:build windows`
 - [x] Document Linux `ctime` limitation in tool output
 

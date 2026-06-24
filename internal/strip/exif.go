@@ -6,7 +6,11 @@
 
 package strip
 
-import "codeberg.org/elkarrde/exifscalpel/exif"
+import (
+	"time"
+
+	"codeberg.org/elkarrde/exifscalpel/exif"
+)
 
 // This file holds lapis's EXIF stripping *policy* — which tags each level keeps
 // or removes. The TIFF/IFD parse and rebuild engine lives in
@@ -36,6 +40,35 @@ func filterRemove(entries []exif.Entry, remove map[uint16]bool) []exif.Entry {
 	return out
 }
 
+// EXIF DateTime tags. All are ASCII (Type 2), holding "YYYY:MM:DD HH:MM:SS\0".
+const (
+	tagDateTime          uint16 = 0x0132 // IFD0
+	tagDateTimeOriginal  uint16 = 0x9003 // Exif sub-IFD
+	tagDateTimeDigitized uint16 = 0x9004 // Exif sub-IFD
+)
+
+// exifDateTimeLayout is Go's reference time in EXIF's "YYYY:MM:DD HH:MM:SS" form.
+const exifDateTimeLayout = "2006:01:02 15:04:05"
+
+// setEXIFDateTimes rewrites the surviving EXIF DateTime fields to t. It only
+// overwrites fields that are already present (those the level chose to keep) and
+// never adds a timestamp the source did not carry — so it cannot reintroduce a
+// field a level just stripped. The value is the standard EXIF ASCII form with a
+// trailing NUL (Type 2, Count 20).
+func setEXIFDateTimes(d *exif.Data, t time.Time) {
+	val := append([]byte(t.Format(exifDateTimeLayout)), 0)
+	overwrite := func(id exif.IFDID, tag uint16) {
+		if e, ok := d.Find(id, tag); ok {
+			e.Type = 2
+			e.Count = uint32(len(val))
+			e.Value = append([]byte(nil), val...)
+		}
+	}
+	overwrite(exif.IFD0, tagDateTime)
+	overwrite(exif.ExifIFD, tagDateTimeOriginal)
+	overwrite(exif.ExifIFD, tagDateTimeDigitized)
+}
+
 // ---- Level-specific EXIF processors ----
 
 // no-camera: keep only shooting data, nothing identifying.
@@ -59,7 +92,7 @@ var noCameraExifSubKeep = map[uint16]bool{
 	0xA405: true, // FocalLengthIn35mmFilm
 }
 
-func processNoCameraEXIF(data []byte) ([]byte, error) {
+func processNoCameraEXIF(data []byte, exifTime *time.Time) ([]byte, error) {
 	d, err := exif.Parse(data)
 	if err != nil {
 		return nil, err
@@ -68,6 +101,10 @@ func processNoCameraEXIF(data []byte) ([]byte, error) {
 	d.IFD0 = filterKeep(d.IFD0, noCameraIFD0Keep)
 	d.ExifSub = filterKeep(d.ExifSub, noCameraExifSubKeep)
 	d.GPSSub = nil // drop all GPS data
+
+	if exifTime != nil {
+		setEXIFDateTimes(d, *exifTime)
+	}
 
 	return d.Build()
 }
@@ -80,7 +117,7 @@ var noGPSIFD0Remove = map[uint16]bool{
 	0x014A: true, // SubIFDs — same
 }
 
-func processNoGPSEXIF(data []byte) ([]byte, error) {
+func processNoGPSEXIF(data []byte, exifTime *time.Time) ([]byte, error) {
 	d, err := exif.Parse(data)
 	if err != nil {
 		return nil, err
@@ -89,6 +126,10 @@ func processNoGPSEXIF(data []byte) ([]byte, error) {
 	d.IFD0 = filterRemove(d.IFD0, noGPSIFD0Remove)
 	d.GPSSub = nil // ensure Build does not re-add the GPS pointer
 	// ExifSub is preserved as-is.
+
+	if exifTime != nil {
+		setEXIFDateTimes(d, *exifTime)
+	}
 
 	return d.Build()
 }

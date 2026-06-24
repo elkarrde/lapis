@@ -107,7 +107,7 @@ The `--time` flag takes a value: `random`, `shift`, or `now`.
 - `shift`: one random offset per batch (±365 days) stored in `Options.Shift *time.Duration`, reused across all files to preserve relative ordering
 - `now`: `time.Now()`
 
-Currently applies to filesystem timestamps only (`os.Chtimes`). Applying to EXIF DateTime fields is a pending TODO.
+The chosen time is applied to **both** the filesystem (`os.Chtimes`) and any surviving EXIF DateTime field. The CLI picks the time once (`timestamp.Pick`) before stripping and passes it to `Strip` as `exifTime *time.Time`; `setEXIFDateTimes` (in `internal/strip/exif.go`) overwrites only the DateTime fields the level kept — DateTime (`0x0132`), DateTimeOriginal (`0x9003`), DateTimeDigitized (`0x9004`) — and never adds one the source lacked or a level just stripped (so at `no-camera` only DateTimeOriginal is rewritten; at `clean` there is no EXIF to touch). The format is EXIF's ASCII `YYYY:MM:DD HH:MM:SS` + NUL.
 
 Windows creation time (`syscall.CreateFileW` + `SetFileTime` behind `//go:build windows`) is also a pending TODO.
 
