@@ -247,6 +247,25 @@ func TestClean_KeepsOnlyStructuralSegments(t *testing.T) {
 	}
 }
 
+func TestStrip_OutputIsValidJPEG(t *testing.T) {
+	// Strip re-parses its own output before returning; assert that every working
+	// level over a range of fixtures produces something that reads back as a
+	// JPEG (and that the validation never rejects legitimate output).
+	fixtures := map[string][]byte{
+		"withGPS":    jpegWithGPS(t),
+		"fullEXIF":   jpegWithFullEXIF(t),
+		"noMetadata": jpegWithNoMetadata(t),
+	}
+	for _, lvl := range []Level{LevelNoGPS, LevelNoCamera, LevelClean} {
+		for name, input := range fixtures {
+			out := stripTo(t, input, lvl)
+			if _, _, err := jpeg.Parse(bytes.NewReader(out)); err != nil {
+				t.Errorf("level %d on %s: output is not a valid JPEG: %v", lvl, name, err)
+			}
+		}
+	}
+}
+
 func TestNonJPEG_GracefulError(t *testing.T) {
 	input := []byte("this is not a jpeg")
 	var out bytes.Buffer

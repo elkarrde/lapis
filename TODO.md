@@ -15,7 +15,7 @@
 - [x] `no-camera` level: excise APP13 entirely; rebuild APP1 retaining only shooting data tags; remove XMP APP1 segments; remove IFD1 (embedded thumbnail)
 - [x] `clean` level: drop ALL non-structural segments (APP1–APP15, COM `0xFFFE`, vendor); keep only APP0, SOF, DHT, DQT, DRI, SOS/SOI/EOI/RST; print steganography warning to stderr
 - [ ] `reencoded` level: rework pixel data (full JPEG re-encode) to defeat pixel-level fingerprints — `goindigo` engine (v3). Placeholder added: `--level reencoded` / `--reencode` currently returns `ErrReencodeNotImplemented`.
-- [ ] Output validation: verify result is a parseable JPEG before writing
+- [x] Output validation: verify result is a parseable JPEG before writing
 - [x] Write to `_lapis/` subdirectory by default; `--in-place` flag to modify originals
 - [x] Collision avoidance: append `_1`, `_2` etc. if output filename already exists
 

@@ -7,6 +7,7 @@
 package strip
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -64,7 +65,20 @@ func Strip(r io.Reader, w io.Writer, level Level) error {
 	if err != nil {
 		return err
 	}
-	return jpeg.Write(w, out, tail)
+
+	// Serialize into a buffer and re-parse it before writing a single byte to w.
+	// We never emit output we can't read back as a JPEG: this catches a rebuilt
+	// segment that overflowed its 16-bit length, and it matters most for the
+	// CLI's --in-place mode, where a corrupt result would overwrite the original.
+	var buf bytes.Buffer
+	if err := jpeg.Write(&buf, out, tail); err != nil {
+		return err
+	}
+	if _, _, err := jpeg.Parse(bytes.NewReader(buf.Bytes())); err != nil {
+		return fmt.Errorf("output validation failed: stripped result is not a valid JPEG: %w", err)
+	}
+	_, err = w.Write(buf.Bytes())
+	return err
 }
 
 func processSegments(segs []jpeg.Segment, level Level) ([]jpeg.Segment, error) {

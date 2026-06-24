@@ -15,10 +15,11 @@
 
 `no-gps`, `no-camera`, and `clean` strip levels are implemented and tested
 (`clean` keeps only structural segments — APP0/SOF/DHT/DQT/DRI/SOS — and drops
-all APP1–APP15, COM, and vendor segments). Outstanding for a complete **v1**
-(see `TODO.md`): IPTC location stripping for `no-gps`, applying timestamps to
-surviving EXIF fields, Windows creation-time editing, and output validation.
-macOS binary is v1.5. (The `reencoded` level — pixel rework, the `goindigo`
+all APP1–APP15, COM, and vendor segments). Output is validated before
+writing (`Strip` re-parses its result; a failed strip writes nothing).
+Outstanding for a complete **v1** (see `TODO.md`): IPTC location stripping for
+`no-gps`, applying timestamps to surviving EXIF fields, and Windows
+creation-time editing. macOS binary is v1.5. (The `reencoded` level — pixel rework, the `goindigo`
 engine — is a v3 placeholder that errors today.)
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full history of changes.

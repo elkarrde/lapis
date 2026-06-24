@@ -88,6 +88,7 @@ Tags 0xA005 (Interoperability IFD) and 0x014A (SubIFDs) are stripped at no-gps l
 ### Output behaviour
 
 - Default: write to `_lapis/` subdirectory alongside input. Never modify originals unless `--in-place` is passed.
+- Output validation: `Strip` re-parses its own serialized output before returning a single byte; if the result is not a parseable JPEG it returns an error and writes nothing. The CLI then counts the file as an error and moves on — so a failed strip never produces a corrupt file, and `--in-place` never overwrites an original with bad output.
 - If output file already exists, append `_1`, `_2` etc. — never overwrite.
 - If input is a directory: process all `.jpg`/`.jpeg` (case-insensitive). With `--recursive`, mirror directory structure inside `_lapis/`.
 - Non-JPEG files: print warning and skip, do not abort batch.
