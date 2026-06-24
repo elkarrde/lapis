@@ -18,7 +18,10 @@ coverage.*
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
+# Dependency directories
+# vendor/ is intentionally committed: it makes `go build` self-contained and
+# offline (the shipped binary already is — this keeps the build that way too).
+# Do NOT uncomment the line below.
 # vendor/
 
 # Go workspace file

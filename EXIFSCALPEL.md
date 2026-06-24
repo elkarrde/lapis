@@ -1,9 +1,11 @@
 # exifscalpel — heads-up for lapis sessions
 
 A shared Go library, **exifscalpel** (`codeberg.org/elkarrde/exifscalpel`, MPL-2.0,
-Go 1.22), is being built to hold the JPEG-metadata primitives currently duplicated
-between lapis and its sibling **tidy-exif**. Status: repo scaffolded, **no Go code
-yet** (pre-code). Full build plan: `../exifscalpel/exifscalpel-HANDOFF.md`.
+Go 1.22), holds the JPEG-metadata primitives that used to be duplicated between lapis
+and its sibling **tidy-exif**. Status: **adopted in lapis as of v0.1.0** (commit
+`4cdb506`). lapis imports `exifscalpel/jpeg` and `exifscalpel/exif`; the dependency is
+**vendored** (`vendor/` committed) so lapis builds offline from the repo alone. Full
+build plan: `../exifscalpel/exifscalpel-HANDOFF.md`.
 
 ## Why lapis is involved
 
@@ -39,9 +41,12 @@ violation of lapis's single-executable goal. The literal "zero `require` entries
 wording in `CLAUDE.md` is a stricter proxy than the goal needs — revisit that wording
 if/when lapis adopts exifscalpel.
 
-## What to do now
+## What's done / what's next
 
-**Nothing in the code.** exifscalpel has no Go yet. Do **not** start removing
-`internal/strip`. Keep building lapis v1 (clean level, etc.) as planned. The migration
-is decoupled — lapis can adopt exifscalpel later, independently of tidy-exif, and only
-after the dependency decision above is made.
+**Migration is done.** The `jpeg` and `exif` packages moved upstream; `internal/strip`
+was trimmed to the policy layer and now imports them. The dependency decision above is
+settled: **vendored**, builds verified offline (`GOPROXY=off go build ./...`).
+
+Remaining lapis v1 work is unaffected by exifscalpel — finish the `clean` level
+(tighten to structural-only segments), output validation, etc. (see `TODO.md`). When
+exifscalpel publishes a new version: bump `go.mod`, then `go mod vendor` and commit.

@@ -1,0 +1,4 @@
+# codeberg.org/elkarrde/exifscalpel v0.1.0
+## explicit; go 1.22
+codeberg.org/elkarrde/exifscalpel/exif
+codeberg.org/elkarrde/exifscalpel/jpeg

@@ -19,26 +19,28 @@ GOOS=windows GOARCH=amd64 go build -o lapis.exe ./cmd/lapis  # cross-compile
 
 ## Module
 
-`codeberg.org/elkarrde/lapis` — Go 1.22+. The binding rule is **no run-time dependencies**: a built `lapis` must be a single self-contained executable that needs nothing but itself (no installs, shared libs, or external tools). Today lapis meets this by shipping pure standard library only, so `go.mod` currently has **zero `require` entries** — a clean proxy for the goal, but not the goal itself.
+`codeberg.org/elkarrde/lapis` — Go 1.22+. The binding rule is **no run-time dependencies**: a built `lapis` must be a single self-contained executable that needs nothing but itself (no installs, shared libs, or external tools). This is about the *shipped binary*, not the dependency list — lapis now has one `require` (the first-party, pure-Go `codeberg.org/elkarrde/exifscalpel`), which statically links into the same one file, so the run-time goal still holds. (The old "zero `require` entries" proxy no longer applies; judge by the binary, not by `go.mod`.)
+
+**Builds are vendored.** `vendor/` is committed, so `go build` / `go test` resolve offline from the repo alone — no module proxy, no sibling checkout. Verify self-containment with `GOPROXY=off go build ./...`. After bumping the exifscalpel version in `go.mod`, re-run `go mod vendor` and commit the result.
 
 What the rule covers, by phase:
 
 - **Run time (what users get) — the only hard constraint.** The shipped binary stays one file with no external deps, and any code statically linked into it must carry a license that does not restrict a user's use case.
-- **Build / development — fair game.** Build- and dev-time tooling is fine provided its license doesn't restrict *our* development or distribution. A pure-Go module that statically links into the same one-file binary (see exifscalpel note below) preserves the run-time goal even though it adds a `require`.
+- **Build / development — fair game, and we take the pragmatic path.** Build- and dev-time tooling is fine provided its license doesn't restrict *our* development or distribution. We use what's best for the job rather than re-implementing it (a pure-Go module that statically links into the same one-file binary — `exifscalpel` — preserves the run-time goal even though it adds a `require`). The portability we care about is the *compiled* `.exe`/Linux binary the user runs, not asceticism at build time.
 - **Testing / cross-checking — unrestricted.** Comparing lapis output against other tools or libraries (exiftool, goexif, etc.) is fine: we're verifying, not reusing or redistributing their code, so their licenses don't bind us.
 
-> **Heads-up (see [`EXIFSCALPEL.md`](EXIFSCALPEL.md)):** a shared first-party library `exifscalpel` is being built from lapis's own `internal/strip` (segment + EXIF engine) plus tidy-exif's XMP code. The "zero deps" rule above exists to keep lapis a **single self-contained executable** — and adopting a pure-Go module like exifscalpel preserves that (it statically links into the same one-file binary). Adopting it would only add a `go.mod require` (kept offline via vendoring or a `replace` directive), so it's a build-setup choice, not a break of the single-binary goal.
+> **Heads-up (see [`EXIFSCALPEL.md`](EXIFSCALPEL.md)):** the shared first-party library `exifscalpel` (`codeberg.org/elkarrde/exifscalpel`, MPL-2.0, pure Go) is now **adopted** — its `jpeg` and `exif` packages hold the segment parser/writer and TIFF/IFD engine that used to live in `internal/strip`. lapis keeps only the stripping *policy* (`Level` / `Strip` / `processSegments`) on top. It statically links into the same one-file binary, so the **single self-contained executable** goal is intact; the dependency is **vendored** (`vendor/` committed) so builds stay offline and self-contained.
 >
-> **License:** lapis is **MPL-2.0** (see [`LICENSE`](LICENSE); every `.go` file carries the `SPDX-License-Identifier: MPL-2.0` + Exhibit A header), and so is exifscalpel — so the whole metadata engine sits under one consistent license. MPL is *file-level* copyleft: its reciprocity covers each MPL source file (modifications must stay open under MPL), not a user's photos, their use of the tool, or proprietary files someone might add alongside. This satisfies the run-time rule above (a user's use case is never restricted) and the build/development rule (MPL doesn't restrict our development or distribution). Because lapis and exifscalpel share the license, the packages lapis contributes upstream (`jpeg`, `exif`) move between repos without any relicensing friction. No action needed now: exifscalpel has no code yet.
+> **License:** lapis is **MPL-2.0** (see [`LICENSE`](LICENSE); every `.go` file carries the `SPDX-License-Identifier: MPL-2.0` + Exhibit A header), and so is exifscalpel — so the whole metadata engine sits under one consistent license. MPL is *file-level* copyleft: its reciprocity covers each MPL source file (modifications must stay open under MPL), not a user's photos, their use of the tool, or proprietary files someone might add alongside. This satisfies the run-time rule above (a user's use case is never restricted) and the build/development rule (MPL doesn't restrict our development or distribution). Because lapis and exifscalpel share the license, the packages lapis contributed upstream (`jpeg`, `exif`) moved between repos without any relicensing friction.
 
 ## Architecture
 
 ```
 cmd/lapis/main.go       ← CLI entry point, flag parsing, orchestration (flag stdlib only)
 cmd/indigo/main.go      ← placeholder only, prints "not yet implemented"
-internal/strip/         ← JPEG segment stripping engine (core logic)
-  strip.go              ← public Strip() API, JPEG segment parser/writer, level dispatch
-  exif.go               ← EXIF IFD parser (resolves all values from offsets) + serializer
+internal/strip/         ← JPEG stripping policy (segment/EXIF engine lives in exifscalpel)
+  strip.go              ← public Strip() API, level dispatch, per-level segment policy
+  exif.go               ← per-level EXIF filtering (parse via exifscalpel/exif, drop tags, rebuild)
 internal/rename/        ← filename scrambling (scramble, uuid)
 internal/timestamp/     ← filesystem timestamp editing
 ```
