@@ -127,6 +127,13 @@ lapis [options] <file|directory>
   --version           print version and exit
 ```
 
+### Argument conventions (`cmd/lapis/main.go`)
+
+- **Flag styles:** `--flag`, `-flag`, `--flag=value`, `-flag value` all work (Go `flag`). Windows `/flag` and `/flag=value` are also accepted on every platform — `normaliseArgs` rewrites them to `--flag`, but only when the name matches a defined flag, so positional paths like `/photos` or `/usr/local/pic.jpg` are left alone (a tidy-exif family convention, made path-safe because lapis takes positional paths).
+- **Order-independent:** flags and the file/dir targets may appear in any order (`lapis photo.jpg --level clean` works). `interleave` drives this — Go's `flag` otherwise stops at the first non-flag token.
+- **Exit codes:** `0` on success, `1` when any file errored (so the tool is scriptable), `2` for an unknown/malformed flag (from `flag`).
+- **Windows double-click:** every exit goes through `die`, which calls `waitIfWindows` to pause for Enter on Windows so a double-clicked `.exe` doesn't vanish before its output is read.
+
 ## Testing
 
 Tests live in `internal/strip/strip_test.go` (white-box, `package strip`), `internal/rename/rename_test.go` (white-box, `package rename`), and `internal/timestamp/timestamp_test.go` (white-box, `package timestamp`). Synthetic JPEG fixtures are built from scratch using a `jpegBuilder` helper — no real photos.

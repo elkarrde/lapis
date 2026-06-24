@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -34,17 +35,19 @@ func main() {
 	verbose := flag.Bool("verbose", false, "print per-file actions")
 	ver := flag.Bool("version", false, "print version and exit")
 
-	flag.Parse()
+	// Accept Windows /flag style on all platforms, and allow flags and the
+	// file/dir arguments to appear in any order.
+	targets, _ := interleave(flag.CommandLine, normaliseArgs(flag.CommandLine, os.Args[1:]))
 
 	if *ver {
 		fmt.Println(version)
-		os.Exit(0)
+		die(0)
 	}
 
-	if flag.NArg() == 0 {
+	if len(targets) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: lapis [options] <file|directory>")
 		flag.PrintDefaults()
-		os.Exit(1)
+		die(1)
 	}
 
 	// --reencode is shorthand for --level reencoded.
@@ -55,13 +58,13 @@ func main() {
 	stripLevel, err := strip.ParseLevel(*level)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "lapis: %v\n", err)
-		os.Exit(1)
+		die(1)
 	}
 
 	// Pixel rework is planned (goindigo); refuse before touching any files.
 	if stripLevel == strip.LevelReencoded {
 		fmt.Fprintln(os.Stderr, "lapis: --level reencoded not yet implemented")
-		os.Exit(1)
+		die(1)
 	}
 
 	var renameMode rename.Mode
@@ -69,7 +72,7 @@ func main() {
 		renameMode, err = rename.ParseMode(*ren)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "lapis: %v\n", err)
-			os.Exit(1)
+			die(1)
 		}
 	}
 
@@ -78,18 +81,18 @@ func main() {
 		tsOpts.Mode, err = timestamp.ParseMode(*tim)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "lapis: %v\n", err)
-			os.Exit(1)
+			die(1)
 		}
 		if tsOpts.Mode == timestamp.ModeRandom {
 			tsOpts.RangeStart, err = parseDate(*timeStart)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "lapis: --time-range-start: %v\n", err)
-				os.Exit(1)
+				die(1)
 			}
 			tsOpts.RangeEnd, err = parseDate(*timeEnd)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "lapis: --time-range-end: %v\n", err)
-				os.Exit(1)
+				die(1)
 			}
 		}
 		if tsOpts.Mode == timestamp.ModeShift {
@@ -110,7 +113,7 @@ func main() {
 	}
 
 	var processed, skipped, errors int
-	for _, target := range flag.Args() {
+	for _, target := range targets {
 		p, s, e := run(target, opts)
 		processed += p
 		skipped += s
@@ -118,6 +121,69 @@ func main() {
 	}
 
 	fmt.Printf("Processed: %d  Skipped: %d  Errors: %d\n", processed, skipped, errors)
+	if errors > 0 {
+		die(1)
+	}
+	die(0)
+}
+
+// normaliseArgs converts Windows-style /flag and /flag=value tokens to --flag so
+// both styles are accepted on every platform (a tidy-exif family convention).
+// Because lapis takes positional path arguments — unlike tidy-exif — a /token is
+// rewritten only when its name matches a flag defined in fs; this leaves real
+// paths such as /photos or /usr/local/pic.jpg untouched while accepting
+// /level=clean, /in-place, and the rest.
+func normaliseArgs(fs *flag.FlagSet, args []string) []string {
+	out := make([]string, len(args))
+	for i, arg := range args {
+		out[i] = arg
+		if !strings.HasPrefix(arg, "/") {
+			continue
+		}
+		name := arg[1:]
+		if eq := strings.IndexByte(name, '='); eq >= 0 {
+			name = name[:eq]
+		}
+		if fs.Lookup(name) != nil {
+			out[i] = "--" + arg[1:]
+		}
+	}
+	return out
+}
+
+// interleave parses fs over args while allowing positional arguments (the
+// file/dir targets) to appear before, after, or among the flags — Go's flag
+// package otherwise stops at the first non-flag token. It returns the collected
+// positionals. With an ExitOnError fs a bad flag exits directly, so callers may
+// ignore the returned error; tests use ContinueOnError and inspect it.
+func interleave(fs *flag.FlagSet, args []string) ([]string, error) {
+	var targets []string
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	for fs.NArg() > 0 {
+		rest := fs.Args()
+		targets = append(targets, rest[0])
+		if err := fs.Parse(rest[1:]); err != nil {
+			return targets, err
+		}
+	}
+	return targets, nil
+}
+
+// die runs the Windows pause (if applicable) and exits with code.
+func die(code int) {
+	waitIfWindows()
+	os.Exit(code)
+}
+
+// waitIfWindows pauses for Enter on Windows so the console window stays open when
+// lapis is launched by double-clicking the .exe (a tidy-exif family convention).
+func waitIfWindows() {
+	if runtime.GOOS == "windows" {
+		fmt.Println("\nPress <Enter> to close.")
+		fmt.Scanln()
+	}
 }
 
 type options struct {
