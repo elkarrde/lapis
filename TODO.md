@@ -28,7 +28,7 @@
 - [x] `--time shift`: single random offset per batch run, applied uniformly to preserve ordering
 - [x] `--time now`: set to `time.Now()`
 - [x] Apply chosen timestamp to surviving EXIF DateTime fields (DateTimeOriginal etc.)
-- [ ] Windows creation time: `syscall.CreateFileW` + `SetFileTime` behind `//go:build windows`
+- [x] Windows creation time: `syscall.CreateFile` + `SetFileTime` behind `//go:build windows`
 - [x] Document Linux `ctime` limitation in tool output
 
 ### `cmd/lapis/main.go` — CLI

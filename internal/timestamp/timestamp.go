@@ -88,11 +88,16 @@ func Pick(opts *Options, originalMtime time.Time) (time.Time, error) {
 	}
 }
 
-// Apply sets the filesystem mtime and atime of path to t.
-// On Linux, ctime cannot be set from userspace and will reflect the time of
-// processing — this is a kernel limitation, not a bug.
+// Apply sets the filesystem timestamps of path to t: the modification and
+// access times on every platform (os.Chtimes), plus the creation time on
+// Windows (setCreationTime). On Linux the creation/change time (ctime) cannot
+// be set from userspace and will reflect the time of processing — a kernel
+// limitation, not a bug — so setCreationTime is a no-op there.
 func Apply(path string, t time.Time) error {
-	return os.Chtimes(path, t, t)
+	if err := os.Chtimes(path, t, t); err != nil {
+		return err
+	}
+	return setCreationTime(path, t)
 }
 
 // randInt63 returns a cryptographically random int64 in [0, max).
