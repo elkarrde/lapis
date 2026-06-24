@@ -11,35 +11,30 @@ import (
 	"encoding/binary"
 	"errors"
 	"testing"
+
+	"codeberg.org/elkarrde/exifscalpel/exif"
+	"codeberg.org/elkarrde/exifscalpel/jpeg"
 )
 
 // ---- Synthetic JPEG builder ----
 //
 // A minimal valid JPEG: SOI + APP0 + optional APP1 + SOF0 + EOI.
 // All segments have plausible structure; pixel data is omitted for brevity.
+// Segment write/parse and EXIF (de)serialization come from the exifscalpel
+// library; these helpers only assemble fixtures and read them back.
 
 type jpegBuilder struct {
-	segs []jpegSeg
+	segs []jpeg.Segment
 }
 
 func (b *jpegBuilder) add(marker byte, data []byte) {
-	b.segs = append(b.segs, jpegSeg{marker: marker, data: data})
+	b.segs = append(b.segs, jpeg.Segment{Marker: marker, Data: data})
 }
 
 func (b *jpegBuilder) bytes() []byte {
 	var buf bytes.Buffer
-	// SOI
-	buf.Write([]byte{0xFF, 0xD8})
-	for _, s := range b.segs {
-		buf.WriteByte(0xFF)
-		buf.WriteByte(s.marker)
-		length := uint16(len(s.data) + 2)
-		buf.WriteByte(byte(length >> 8))
-		buf.WriteByte(byte(length))
-		buf.Write(s.data)
-	}
-	// EOI
-	buf.Write([]byte{0xFF, 0xD9})
+	// jpeg.Write emits SOI, the segments, then the tail (EOI) verbatim.
+	_ = jpeg.Write(&buf, b.segs, []byte{0xFF, 0xD9})
 	return buf.Bytes()
 }
 
@@ -55,46 +50,17 @@ func sof0() []byte {
 
 // ---- EXIF/TIFF builders ----
 
-// buildMinimalEXIF returns an APP1 EXIF payload with the given IFD0 entries
-// and no sub-IFDs. Uses little-endian byte order.
-func buildMinimalEXIF(entries []ifdEntry) []byte {
-	bo := binary.LittleEndian
-
-	ifd0Base := uint32(8) // right after TIFF header
-	ifd0Sz := uint32(2 + len(entries)*12 + 4)
-	dataBase := ifd0Base + ifd0Sz
-
-	var extData []byte
-	ifdBuf := appendU16(nil, bo, uint16(len(entries)))
-	for _, e := range entries {
-		ifdBuf = appendU16(ifdBuf, bo, e.tag)
-		ifdBuf = appendU16(ifdBuf, bo, e.typ)
-		ifdBuf = appendU32(ifdBuf, bo, e.count)
-		sz := typeSize(e.typ)
-		valLen := uint64(e.count) * uint64(sz)
-		if sz == 0 || valLen <= 4 {
-			var pad [4]byte
-			copy(pad[:], e.value)
-			ifdBuf = append(ifdBuf, pad[:]...)
-		} else {
-			off := dataBase + uint32(len(extData))
-			extData = append(extData, e.value...)
-			ifdBuf = appendU32(ifdBuf, bo, off)
-		}
+// buildEXIFPayload serializes an APP1 EXIF payload from the given IFDs via the
+// library's rebuild path. Build reconciles the sub-IFD pointer entries from the
+// populated sub-IFDs, so callers pass only real tag entries.
+func buildEXIFPayload(t *testing.T, bo binary.ByteOrder, ifd0, exifSub, gpsSub []exif.Entry) []byte {
+	t.Helper()
+	d := &exif.Data{ByteOrder: bo, IFD0: ifd0, ExifSub: exifSub, GPSSub: gpsSub}
+	payload, err := d.Build()
+	if err != nil {
+		t.Fatalf("build EXIF: %v", err)
 	}
-	ifdBuf = appendU32(ifdBuf, bo, 0) // no IFD1
-
-	var tiff []byte
-	tiff = append(tiff, 'I', 'I')           // little-endian
-	tiff = appendU16(tiff, bo, 42)           // TIFF magic
-	tiff = appendU32(tiff, bo, ifd0Base)     // IFD0 offset
-	tiff = append(tiff, ifdBuf...)
-	tiff = append(tiff, extData...)
-
-	result := make([]byte, 6+len(tiff))
-	copy(result, exifSig)
-	copy(result[6:], tiff)
-	return result
+	return payload
 }
 
 // makeRATIONAL encodes a RATIONAL value (two uint32s, LE).
@@ -112,27 +78,18 @@ func makeU16(v uint16) []byte {
 	return b
 }
 
-// gpsIFDPointerInIFD0 returns the IFD0 entries for a JPEG that includes a GPS sub-IFD.
-// The GPS sub-IFD pointer offset must be patched in after the full layout is known;
-// for testing purposes we build it through buildEXIF so offsets are correct.
+// jpegWithGPS builds a JPEG whose EXIF has a Make tag in IFD0 and a GPS sub-IFD.
 func jpegWithGPS(t *testing.T) []byte {
 	t.Helper()
-	// IFD0 will have: Make (ASCII), GPS IFD pointer
-	// Exif sub-IFD: none
-	// GPS sub-IFD: GPSLatitudeRef, GPSLatitude
 
-	gpsEntries := []ifdEntry{
-		{tag: 0x0001, typ: 2, count: 2, value: []byte{'N', 0}}, // GPSLatitudeRef (ASCII "N\0")
-		{tag: 0x0002, typ: 5, count: 3, value: append(makeRATIONAL(51, 1), append(makeRATIONAL(30, 1), makeRATIONAL(0, 1)...)...)}, // GPSLatitude
+	gpsEntries := []exif.Entry{
+		{Tag: 0x0001, Type: 2, Count: 2, Value: []byte{'N', 0}},                                                                     // GPSLatitudeRef (ASCII "N\0")
+		{Tag: 0x0002, Type: 5, Count: 3, Value: append(makeRATIONAL(51, 1), append(makeRATIONAL(30, 1), makeRATIONAL(0, 1)...)...)}, // GPSLatitude
 	}
-
-	ifd0 := []ifdEntry{
-		{tag: 0x010F, typ: 2, count: 5, value: []byte{'T', 'e', 's', 't', 0}}, // Make
-		ptrEntry(0x8825), // GPS IFD pointer — buildEXIF patches this
+	ifd0 := []exif.Entry{
+		{Tag: 0x010F, Type: 2, Count: 5, Value: []byte{'T', 'e', 's', 't', 0}}, // Make
 	}
-	sortByTag(ifd0)
-
-	exifData := buildEXIF(binary.LittleEndian, ifd0, nil, gpsEntries)
+	exifData := buildEXIFPayload(t, binary.LittleEndian, ifd0, nil, gpsEntries)
 
 	var b jpegBuilder
 	b.add(0xE0, app0())
@@ -151,11 +108,11 @@ func jpegWithNoMetadata(t *testing.T) []byte {
 
 func jpegWithFullEXIF(t *testing.T) []byte {
 	t.Helper()
-	// Build a JPEG with EXIF containing Make, a GPS pointer, and APP13.
-	ifd0 := []ifdEntry{
-		{tag: 0x010F, typ: 2, count: 5, value: []byte{'F', 'u', 'j', 'i', 0}}, // Make
+	// JPEG with EXIF containing Make and a fake APP13 (IPTC).
+	ifd0 := []exif.Entry{
+		{Tag: 0x010F, Type: 2, Count: 5, Value: []byte{'F', 'u', 'j', 'i', 0}}, // Make
 	}
-	exifData := buildEXIF(binary.LittleEndian, ifd0, nil, nil)
+	exifData := buildEXIFPayload(t, binary.LittleEndian, ifd0, nil, nil)
 
 	var b jpegBuilder
 	b.add(0xE0, app0())
@@ -177,25 +134,25 @@ func stripTo(t *testing.T, input []byte, level Level) []byte {
 }
 
 func findSegment(data []byte, marker byte) []byte {
-	segs, _, err := parseJPEG(bytes.NewReader(data))
+	segs, _, err := jpeg.Parse(bytes.NewReader(data))
 	if err != nil {
 		return nil
 	}
 	for _, s := range segs {
-		if s.marker == marker {
-			return s.data
+		if s.Marker == marker {
+			return s.Data
 		}
 	}
 	return nil
 }
 
 func hasMarker(data []byte, marker byte) bool {
-	segs, _, err := parseJPEG(bytes.NewReader(data))
+	segs, _, err := jpeg.Parse(bytes.NewReader(data))
 	if err != nil {
 		return false
 	}
 	for _, s := range segs {
-		if s.marker == marker {
+		if s.Marker == marker {
 			return true
 		}
 	}
@@ -218,23 +175,23 @@ func TestNoGPS_RemovesGPS(t *testing.T) {
 	if app1 == nil {
 		t.Fatal("no-gps: could not find APP1")
 	}
-	p, err := parseEXIF(app1)
+	d, err := exif.Parse(app1)
 	if err != nil {
-		t.Fatalf("no-gps: parseEXIF on output: %v", err)
+		t.Fatalf("no-gps: exif.Parse on output: %v", err)
 	}
-	for _, e := range p.ifd0 {
-		if e.tag == 0x8825 {
+	for _, e := range d.IFD0 {
+		if e.Tag == exif.GPSIFDPointer {
 			t.Error("no-gps: GPS IFD pointer still present in IFD0")
 		}
 	}
-	if len(p.gpsSub) > 0 {
+	if len(d.GPSSub) > 0 {
 		t.Error("no-gps: GPS sub-IFD still present")
 	}
 
 	// Make tag should be preserved
 	found := false
-	for _, e := range p.ifd0 {
-		if e.tag == 0x010F {
+	for _, e := range d.IFD0 {
+		if e.Tag == 0x010F {
 			found = true
 		}
 	}
@@ -288,27 +245,21 @@ func TestNoMetadata_PassesThroughClean(t *testing.T) {
 	out := stripTo(t, input, LevelNoCamera)
 
 	// Must still be parseable
-	segs, _, err := parseJPEG(bytes.NewReader(out))
-	if err != nil {
+	if _, _, err := jpeg.Parse(bytes.NewReader(out)); err != nil {
 		t.Fatalf("output is not a valid JPEG: %v", err)
 	}
-	_ = segs
 }
 
 func TestNoCamera_RemovesEmbeddedThumbnail(t *testing.T) {
-	// Build EXIF with a Make tag and a simulated Exif sub-IFD.
-	// IFD1 (thumbnail) is parsed by parseEXIF but excluded from output.
-	// Since our buildEXIF already never emits IFD1, just verify the output
-	// EXIF has no IFD1 next-pointer from IFD0.
-	ifd0 := []ifdEntry{
-		{tag: 0x0100, typ: 4, count: 1, value: []byte{1, 0, 0, 0}}, // ImageWidth=1
+	// Build EXIF with an ImageWidth tag in IFD0 and an ISO tag in the Exif
+	// sub-IFD. no-camera must keep shooting data (ISO) and drop everything else.
+	ifd0 := []exif.Entry{
+		{Tag: 0x0100, Type: 4, Count: 1, Value: []byte{1, 0, 0, 0}}, // ImageWidth=1
 	}
-	exifSub := []ifdEntry{
-		{tag: 0x8827, typ: 3, count: 1, value: makeU16(400)}, // ISO=400
+	exifSub := []exif.Entry{
+		{Tag: 0x8827, Type: 3, Count: 1, Value: makeU16(400)}, // ISO=400
 	}
-	ifd0 = append(ifd0, ptrEntry(0x8769))
-	sortByTag(ifd0)
-	exifData := buildEXIF(binary.LittleEndian, ifd0, exifSub, nil)
+	exifData := buildEXIFPayload(t, binary.LittleEndian, ifd0, exifSub, nil)
 
 	var b jpegBuilder
 	b.add(0xE0, app0())
@@ -321,22 +272,21 @@ func TestNoCamera_RemovesEmbeddedThumbnail(t *testing.T) {
 	if app1 == nil {
 		t.Fatal("no-camera: EXIF APP1 missing")
 	}
-	p, err := parseEXIF(app1)
+	d, err := exif.Parse(app1)
 	if err != nil {
-		t.Fatalf("no-camera: parseEXIF on output: %v", err)
+		t.Fatalf("no-camera: exif.Parse on output: %v", err)
 	}
 
-	// IFD0 next pointer should be 0 (no IFD1)
-	// We verify indirectly: Make tag must be absent (not in journalist keep list)
-	for _, e := range p.ifd0 {
-		if e.tag == 0x010F {
+	// Make tag must be absent (not in the no-camera keep list).
+	for _, e := range d.IFD0 {
+		if e.Tag == 0x010F {
 			t.Error("no-camera: Make tag should have been removed")
 		}
 	}
-	// ISO should be in Exif sub-IFD
+	// ISO should survive in the Exif sub-IFD.
 	found := false
-	for _, e := range p.exifSub {
-		if e.tag == 0x8827 {
+	for _, e := range d.ExifSub {
+		if e.Tag == 0x8827 {
 			found = true
 		}
 	}
