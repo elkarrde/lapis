@@ -200,19 +200,50 @@ func TestNoGPS_RemovesGPS(t *testing.T) {
 	}
 }
 
-func TestClean_RemovesAllMetadataSegments(t *testing.T) {
-	input := jpegWithFullEXIF(t)
+func TestClean_KeepsOnlyStructuralSegments(t *testing.T) {
+	// A JPEG carrying a broad spread of metadata/app/comment segments alongside
+	// the structural ones. Clean must keep only the structural set and drop the
+	// rest — including vendor APPn segments that can carry identifying info.
+	ifd0 := []exif.Entry{{Tag: 0x010F, Type: 2, Count: 5, Value: []byte{'F', 'u', 'j', 'i', 0}}}
+	exifData := buildEXIFPayload(t, binary.LittleEndian, ifd0, nil, nil)
+
+	var b jpegBuilder
+	b.add(0xE0, app0())                                                  // APP0 / JFIF   keep
+	b.add(0xE1, exifData)                                                // APP1 EXIF     drop
+	b.add(0xE1, append([]byte("http://ns.adobe.com/xap/1.0/\x00"), '<')) // APP1 XMP      drop
+	b.add(0xE2, []byte("ICC_PROFILE\x00\x01\x01"))                       // APP2 ICC      drop
+	b.add(0xEC, []byte("Ducky\x00\x01"))                                 // APP12 Ducky   drop
+	b.add(0xED, []byte("Photoshop 3.0\x008BIM"))                         // APP13 IPTC    drop
+	b.add(0xEF, []byte{0x00})                                            // APP15         drop
+	b.add(0xFE, []byte("a private comment"))                             // COM           drop
+	b.add(0xDB, []byte{0x00, 0x01, 0x02})                                // DQT           keep
+	b.add(0xC4, []byte{0x00, 0x01, 0x02})                                // DHT           keep
+	b.add(0xC0, sof0())                                                  // SOF0          keep
+	b.add(0xDA, []byte{0x01, 0x01, 0x00, 0x00, 0x3F, 0x00})              // SOS header    keep
+	input := b.bytes()
+
 	out := stripTo(t, input, LevelClean)
 
-	if hasMarker(out, 0xE1) {
-		t.Error("clean: APP1 segment still present")
+	// Output must still parse as a JPEG.
+	if _, _, err := jpeg.Parse(bytes.NewReader(out)); err != nil {
+		t.Fatalf("clean: output is not a valid JPEG: %v", err)
 	}
-	if hasMarker(out, 0xED) {
-		t.Error("clean: APP13 segment still present")
+
+	// Non-structural markers must all be gone: APP1–APP15 and COM.
+	for m := byte(0xE1); m <= 0xEF; m++ {
+		if hasMarker(out, m) {
+			t.Errorf("clean: APP%d segment (0x%02X) still present", m-0xE0, m)
+		}
 	}
-	// APP0 (JFIF) should be kept
-	if !hasMarker(out, 0xE0) {
-		t.Error("clean: APP0 unexpectedly removed")
+	if hasMarker(out, 0xFE) {
+		t.Error("clean: COM segment still present")
+	}
+
+	// Structural markers must survive.
+	for _, m := range []byte{0xE0, 0xDB, 0xC4, 0xC0, 0xDA} {
+		if !hasMarker(out, m) {
+			t.Errorf("clean: structural marker 0x%02X unexpectedly removed", m)
+		}
 	}
 }
 

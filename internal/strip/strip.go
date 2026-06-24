@@ -21,7 +21,7 @@ type Level int
 const (
 	LevelNoGPS     Level = iota + 1 // GPS and location data only
 	LevelNoCamera                   // all identifying metadata; keep shooting data
-	LevelClean                      // excise all EXIF and IPTC segments entirely
+	LevelClean                      // keep only structural segments; excise all metadata
 	LevelReencoded                  // clean + pixel rework (planned; not yet implemented)
 )
 
@@ -79,11 +79,11 @@ func processSegments(segs []jpeg.Segment, level Level) ([]jpeg.Segment, error) {
 	case LevelClean:
 		fmt.Fprintln(os.Stderr, cleanWarning)
 		for _, s := range segs {
-			// drop APP1 (EXIF and XMP) and APP13 (IPTC)
-			if s.Marker == 0xE1 || s.Marker == 0xED {
-				continue
+			// allow-list: keep only structural segments, drop everything else
+			// (APP1–APP15, COM, and any vendor segment that can carry metadata)
+			if isStructuralClean(s.Marker) {
+				out = append(out, s)
 			}
-			out = append(out, s)
 		}
 
 	case LevelNoCamera:
@@ -118,4 +118,33 @@ func processSegments(segs []jpeg.Segment, level Level) ([]jpeg.Segment, error) {
 		}
 	}
 	return out, nil
+}
+
+// isStructuralClean reports whether a segment marker must survive the clean
+// level. The allow-list is APP0 (JFIF density/units), the frame and coding-table
+// markers in 0xC0–0xCF (SOF0–SOF15, DHT at 0xC4, DAC at 0xCC; the unused JPG
+// extension marker 0xC8 is excluded), DQT (0xDB), DRI (0xDD), and SOS (0xDA).
+//
+// SOI, EOI and RST markers never reach the segment list — jpeg.Parse emits SOI
+// itself and returns the scan data plus EOI as the opaque tail — so they need no
+// case here and are always preserved by jpeg.Write.
+//
+// Everything not on this list is dropped: APP1–APP15 (EXIF, XMP, ICC, IPTC/
+// Photoshop, MPF, C2PA, "Ducky", and every other vendor APPn), the COM comment
+// segment (0xFE), and any other non-structural marker.
+func isStructuralClean(m byte) bool {
+	switch {
+	case m == 0xE0: // APP0 / JFIF
+		return true
+	case m >= 0xC0 && m <= 0xCF && m != 0xC8: // SOF0–15, DHT (0xC4), DAC (0xCC)
+		return true
+	case m == 0xDB: // DQT
+		return true
+	case m == 0xDD: // DRI
+		return true
+	case m == 0xDA: // SOS
+		return true
+	default:
+		return false
+	}
 }
