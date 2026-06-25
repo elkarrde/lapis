@@ -1,6 +1,6 @@
 # Status
 
-*Last updated: 2026-06-19*
+*Last updated: 2026-06-25*
 
 | Field | Value |
 |:--|:--|
@@ -21,8 +21,10 @@ writing (`Strip` re-parses its result; a failed strip writes nothing). The
 filesystem, including the Windows creation time. The CLI accepts flags and paths
 in any order, takes both `--flag` and Windows `/flag` styles, exits non-zero when
 any file errors, and pauses on Windows for double-click users. The only item
-outstanding for a complete **v1** (see `TODO.md`) is IPTC location stripping for
-`no-gps` (deferred; needs an APP13 parser). macOS binary is v1.5. (The `reencoded` level — pixel rework, the `goindigo`
+outstanding for a complete **v1** is location stripping for `no-gps` from APP13
+IPTC and XMP — now **scoped** (see `docs/IPTC-XMP-LOCATION-SCOPE.md`): build a new
+`exifscalpel/iptc` package + an opt-in `xmp.CleanLocation`, ship as exifscalpel
+v0.2.0, re-vendor, then add the lapis `no-gps` policy. macOS binary is v1.5. (The `reencoded` level — pixel rework, the `goindigo`
 engine — is a v3 placeholder that errors today.)
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full history of changes.

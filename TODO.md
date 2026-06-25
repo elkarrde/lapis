@@ -11,7 +11,7 @@
 - [x] JPEG segment parser (walk `0xFF` markers, extract type + length + payload)
 - [x] EXIF IFD tag reader (IFD0, GPS sub-IFD, Exif sub-IFD) supporting both byte orders
 - [x] `no-gps` level: remove GPS IFD pointer from APP1
-- [ ] `no-gps` level: remove IPTC location fields from APP13 (requires IPTC parser — deferred)
+- [ ] `no-gps` level: remove location from APP13 IPTC **and** XMP — scoped, not started. See [`docs/IPTC-XMP-LOCATION-SCOPE.md`](docs/IPTC-XMP-LOCATION-SCOPE.md). Decided: build `exifscalpel/iptc` package (v0.2.0) + new opt-in `xmp.CleanLocation` (incl. structured `Iptc4xmpExt`), re-vendor, then lapis `no-gps` policy.
 - [x] `no-camera` level: excise APP13 entirely; rebuild APP1 retaining only shooting data tags; remove XMP APP1 segments; remove IFD1 (embedded thumbnail)
 - [x] `clean` level: drop ALL non-structural segments (APP1–APP15, COM `0xFFFE`, vendor); keep only APP0, SOF, DHT, DQT, DRI, SOS/SOI/EOI/RST; print steganography warning to stderr
 - [ ] `reencoded` level: rework pixel data (full JPEG re-encode) to defeat pixel-level fingerprints — `goindigo` engine (v3). Placeholder added: `--level reencoded` / `--reencode` currently returns `ErrReencodeNotImplemented`.
