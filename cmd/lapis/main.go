@@ -208,7 +208,10 @@ func run(target string, opts options) (processed, skipped, errors int) {
 	if info.IsDir() {
 		return runDir(target, target, opts)
 	}
-	ok, err2 := processFile(target, target, opts)
+	// baseDir is the root the _lapis/ mirror hangs off; for a single file that is
+	// the file's directory, not the file itself (else the output path would
+	// resolve under the file, e.g. photo.jpg/_lapis).
+	ok, err2 := processFile(target, filepath.Dir(target), opts)
 	if err2 != nil {
 		fmt.Fprintf(os.Stderr, "lapis: %s: %v\n", target, err2)
 		errors++
@@ -316,13 +319,24 @@ func processFile(path, baseDir string, opts options) (bool, error) {
 		}
 	}
 
-	outPath := collisionSafe(filepath.Join(outDir, outName))
-
+	var outPath string
 	if opts.inPlace {
-		if err := os.WriteFile(outPath, buf.Bytes(), info.Mode()); err != nil {
+		// Modify the file directly: the destination is the file itself (or, with
+		// --rename, a new name in the same directory — a move). Write atomically
+		// via a temp file so a failure never leaves a half-written image, and do
+		// NOT collision-suffix — the existing original is the intended target,
+		// not a collision.
+		outPath = filepath.Join(outDir, outName)
+		if err := writeAtomic(outPath, buf.Bytes(), info.Mode()); err != nil {
 			return false, err
 		}
+		if outPath != path {
+			if err := os.Remove(path); err != nil { // --rename: drop the original
+				return false, err
+			}
+		}
 	} else {
+		outPath = collisionSafe(filepath.Join(outDir, outName))
 		if err := os.WriteFile(outPath, buf.Bytes(), 0644); err != nil {
 			return false, err
 		}
@@ -338,6 +352,36 @@ func processFile(path, baseDir string, opts options) (bool, error) {
 		fmt.Printf("%s -> %s\n", path, outPath)
 	}
 	return true, nil
+}
+
+// writeAtomic writes data to a temp file in dest's directory, gives it mode,
+// then renames it over dest. The rename is atomic on the same filesystem, so an
+// interrupted or failed write never clobbers an existing file with partial
+// output — the reason --in-place can overwrite an original safely.
+func writeAtomic(dest string, data []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".lapis-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, mode); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, dest); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
 }
 
 // collisionSafe returns path if it does not exist, otherwise path_1, path_2, etc.
