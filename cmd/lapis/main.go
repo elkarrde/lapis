@@ -21,7 +21,7 @@ import (
 	"codeberg.org/elkarrde/lapis/internal/timestamp"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
 	level := flag.String("level", "no-camera", "stripping level: no-gps | no-camera | clean | reencoded")

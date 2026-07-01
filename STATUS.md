@@ -4,12 +4,12 @@
 
 | Field | Value |
 |:--|:--|
-| Phase | building (MVP released as v0.1.0; v1 stripping feature-complete; two CLI output bugs fixed) |
-| Version | v0.1.0 (unreleased work on `main`; warrants a v0.2.0 tag) |
+| Phase | building (v0.2.0: no-gps location stripping complete; two CLI output bugs fixed) |
+| Version | v0.2.0 (tagged; push + attach binaries pending) |
 | Build | passing (`GOPROXY=off go build ./...`; Windows cross-compile OK) |
 | Tests | passing (`cmd/lapis`, `internal/strip`, `internal/rename`, `internal/timestamp`) |
 | Deployed | v0.1.0 published on [Codeberg Releases](https://codeberg.org/elkarrde/lapis/releases/tag/v0.1.0) (2026-05-22) with binaries attached: `lapis-0.1.0` (Linux), `lapis-0.1.0.exe` (Windows) |
-| Blocker | none — no-gps location stripping done + verified; two pre-existing CLI output bugs fixed. Ready to tag/release a lapis v0.2.0 |
+| Blocker | v0.2.0 tagged locally — push `main` + the tag to Codeberg and attach v0.2.0 Linux/Windows binaries to the release |
 
 ## Notes
 
