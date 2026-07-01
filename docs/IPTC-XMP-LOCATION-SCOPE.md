@@ -1,6 +1,9 @@
 # no-gps location stripping — scope & decisions
 
-*Status: scoped, not yet implemented. Last updated 2026-06-25.*
+*Status: **implemented** in exifscalpel v0.2.0 + lapis `no-gps` policy. Last updated 2026-07-02.*
+*Structured `Iptc4xmpExt` was handled by value-blanking at every nesting depth (see
+`xmp.CleanLocation`) rather than container-element deletion — length-preserving and
+well-formed, the empty containers remain. See CHANGELOG/STATUS in both repos.*
 
 Closes the last v1 gap: `no-gps` removes the EXIF GPS IFD but still leaves
 location data in **IPTC (APP13)** and **XMP (APP1)**. This note records the agreed

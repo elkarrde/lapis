@@ -40,6 +40,7 @@ cmd/lapis/main.go       ← CLI entry point, flag parsing, orchestration (flag s
 cmd/indigo/main.go      ← placeholder only, prints "not yet implemented"
 internal/strip/         ← JPEG stripping policy (segment/EXIF engine lives in exifscalpel)
   strip.go              ← public Strip() API, level dispatch, per-level segment policy
+                          (incl. no-gps IPTC/XMP location stripping via exifscalpel/iptc + xmp.CleanLocation)
   exif.go               ← per-level EXIF filtering (parse via exifscalpel/exif, drop tags, rebuild)
 internal/rename/        ← filename scrambling (scramble, uuid)
 internal/timestamp/     ← filesystem timestamp editing
@@ -61,7 +62,7 @@ All metadata work operates directly on the binary JPEG segment structure — no 
 
 | Level | Constant | Action |
 |-------|----------|--------|
-| `no-gps` | `LevelNoGPS` | Parse APP1, remove GPS IFD pointer (0x8825) from IFD0. IPTC location fields in APP13 are a pending TODO. |
+| `no-gps` | `LevelNoGPS` | Parse APP1, remove GPS IFD pointer (0x8825) from IFD0. Strip IPTC location datasets from APP13 (via `exifscalpel/iptc`) and blank location/GPS fields in XMP (via `xmp.CleanLocation`); XMP is kept, only its location values are cleared. |
 | `no-camera` | `LevelNoCamera` | Excise APP13 entirely. Rebuild APP1 keeping only shooting data tags. Remove all XMP APP1 segments. IFD1 (thumbnail) is never emitted. |
 | `clean` | `LevelClean` | Drop all non-structural segments: keep only APP0 (`0xFFE0`), SOF (`0xFFC0`–`0xFFCF`, excluding `0xFFC4`/`0xFFC8`), DHT (`0xFFC4`), DQT (`0xFFDB`), DRI (`0xFFDD`), SOS/SOI/EOI/RST. Everything else — APP1–APP15, COM (`0xFFFE`), vendor segments — is excised. Print steganography warning to stderr. |
 | `reencoded` | `LevelReencoded` | **Planned, not yet implemented.** Intended to do everything `clean` does plus rework pixel data to defeat pixel-level fingerprints (future `goindigo`). Today `Strip` returns `ErrReencodeNotImplemented` and the CLI exits non-zero before touching any file. Selectable via `--level reencoded` or the `--reencode` shorthand. |

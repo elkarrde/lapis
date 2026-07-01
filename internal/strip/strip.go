@@ -14,7 +14,9 @@ import (
 	"os"
 	"time"
 
+	"codeberg.org/elkarrde/exifscalpel/iptc"
 	"codeberg.org/elkarrde/exifscalpel/jpeg"
+	"codeberg.org/elkarrde/exifscalpel/xmp"
 )
 
 // Level controls how aggressively metadata is stripped.
@@ -125,20 +127,76 @@ func processSegments(segs []jpeg.Segment, level Level, exifTime *time.Time) ([]j
 
 	case LevelNoGPS:
 		for _, s := range segs {
-			if jpeg.IsEXIF(s) {
+			switch {
+			case jpeg.IsEXIF(s):
 				newData, err := processNoGPSEXIF(s.Data, exifTime)
 				if err != nil {
 					out = append(out, s) // best-effort: keep original on parse failure
 				} else {
 					out = append(out, jpeg.Segment{Marker: 0xE1, Data: newData})
 				}
-				continue
+			case jpeg.IsXMP(s): // XMP APP1 — blank location values, keep the rest
+				out = appendNoGPSXMP(out, s)
+			case s.Marker == 0xED: // APP13 / IPTC — strip location datasets only
+				out = appendNoGPSIPTC(out, s)
+			default:
+				out = append(out, s)
 			}
-			// TODO: strip IPTC location fields from APP13 (requires IPTC segment parser)
-			out = append(out, s)
 		}
 	}
 	return out, nil
+}
+
+// noGPSLocationDatasets are the IPTC-IIM record-2 datasets that carry location
+// data, removed at the no-gps level. Everything else in APP13 — descriptive
+// datasets (By-line, Caption, Keywords, Object Name, ...) and every non-IPTC
+// Photoshop resource block (thumbnail, ICC, embedded EXIF) — is preserved.
+var noGPSLocationDatasets = []struct{ record, number uint8 }{
+	{2, 26},  // Content Location Code (repeatable)
+	{2, 27},  // Content Location Name (repeatable)
+	{2, 90},  // City
+	{2, 92},  // Sub-location
+	{2, 95},  // Province/State
+	{2, 100}, // Country/Primary Location Code
+	{2, 101}, // Country/Primary Location Name
+}
+
+// appendNoGPSIPTC strips the IPTC location datasets from an APP13 segment and
+// appends the result to out. A non-Photoshop or otherwise unparseable APP13 is
+// passed through unchanged (best-effort — never emit corrupt IPTC). If stripping
+// leaves the Photoshop resource set empty, the whole segment is dropped.
+func appendNoGPSIPTC(out []jpeg.Segment, s jpeg.Segment) []jpeg.Segment {
+	d, err := iptc.Parse(s.Data)
+	if err != nil {
+		return append(out, s) // not a Photoshop APP13 we understand; leave it
+	}
+	removed := 0
+	for _, ds := range noGPSLocationDatasets {
+		removed += d.Remove(ds.record, ds.number)
+	}
+	if removed == 0 {
+		return append(out, s) // no location data present; keep original bytes
+	}
+	if d.Empty() {
+		return out // all resource blocks gone; drop the segment entirely
+	}
+	newData, err := d.Build()
+	if err != nil {
+		return append(out, s) // best-effort: keep original on rebuild failure
+	}
+	return append(out, jpeg.Segment{Marker: 0xED, Data: newData})
+}
+
+// appendNoGPSXMP strips location and GPS fields from an XMP APP1 segment and
+// appends the result to out. Unlike no-camera (which excises XMP entirely),
+// no-gps keeps the XMP block and only blanks its location values. A parse
+// failure or a block carrying no location data is passed through unchanged.
+func appendNoGPSXMP(out []jpeg.Segment, s jpeg.Segment) []jpeg.Segment {
+	newData, changed, err := xmp.CleanLocation(s.Data)
+	if err != nil || !changed {
+		return append(out, s)
+	}
+	return append(out, jpeg.Segment{Marker: 0xE1, Data: newData})
 }
 
 // isStructuralClean reports whether a segment marker must survive the clean

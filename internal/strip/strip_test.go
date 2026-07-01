@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"codeberg.org/elkarrde/exifscalpel/exif"
+	"codeberg.org/elkarrde/exifscalpel/iptc"
 	"codeberg.org/elkarrde/exifscalpel/jpeg"
 )
 
@@ -47,6 +48,55 @@ func app0() []byte {
 // sof0 returns a minimal SOF0 payload (1x1 greyscale).
 func sof0() []byte {
 	return []byte{8, 0, 1, 0, 1, 1, 1, 0x11, 0}
+}
+
+// ---- IPTC (APP13) and XMP (APP1) fixture builders ----
+
+// iimDataset builds one IPTC-IIM dataset (standard 2-byte length).
+func iimDataset(record, number byte, value string) []byte {
+	b := []byte{0x1C, record, number}
+	b = binary.BigEndian.AppendUint16(b, uint16(len(value)))
+	return append(b, value...)
+}
+
+// photoshopAPP13 assembles an APP13 payload: the "Photoshop 3.0\0" signature
+// plus a single 0x0404 IPTC-IIM resource block wrapping the given datasets.
+func photoshopAPP13(datasets ...[]byte) []byte {
+	var iim []byte
+	for _, d := range datasets {
+		iim = append(iim, d...)
+	}
+	irb := []byte("8BIM")
+	irb = binary.BigEndian.AppendUint16(irb, 0x0404)
+	irb = append(irb, 0, 0) // empty, even-padded Pascal name
+	irb = binary.BigEndian.AppendUint32(irb, uint32(len(iim)))
+	irb = append(irb, iim...)
+	if len(iim)%2 != 0 {
+		irb = append(irb, 0)
+	}
+	return append([]byte("Photoshop 3.0\x00"), irb...)
+}
+
+// xmpLocationPayload builds an XMP APP1 payload (xap signature + XML) carrying
+// GPS coordinates and a place-name alongside a non-location field, with an
+// xpacket padding region so length-preserving cleaning has room to pad.
+func xmpLocationPayload() []byte {
+	const sig = "http://ns.adobe.com/xap/1.0/\x00"
+	const xml = `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+      xmlns:exif="http://ns.adobe.com/exif/1.0/"
+      xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      exif:GPSLatitude="52,31.5N"
+      exif:GPSLongitude="13,24.3E"
+      photoshop:City="Berlin"
+      xmp:CreatorTool="Adobe Lightroom Classic 13.0"/>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`
+	return append([]byte(sig), xml...)
 }
 
 // ---- EXIF/TIFF builders ----
@@ -245,6 +295,102 @@ func TestNoGPS_RemovesGPS(t *testing.T) {
 	}
 	if !found {
 		t.Error("no-gps: Make tag unexpectedly removed")
+	}
+}
+
+func TestNoGPS_StripsIPTCLocation(t *testing.T) {
+	var b jpegBuilder
+	b.add(0xE0, app0())
+	b.add(0xED, photoshopAPP13(
+		iimDataset(2, 80, "Jane Photographer"), // By-line — keep
+		iimDataset(2, 120, "A caption"),        // Caption — keep
+		iimDataset(2, 90, "Berlin"),            // City — strip
+		iimDataset(2, 95, "Berlin"),            // Province/State — strip
+		iimDataset(2, 101, "Germany"),          // Country name — strip
+		iimDataset(2, 26, "US-CA"),             // Content Location Code — strip
+	))
+	b.add(0xC0, sof0())
+
+	out := stripTo(t, b.bytes(), LevelNoGPS)
+
+	app13 := findSegment(out, 0xED)
+	if app13 == nil {
+		t.Fatal("no-gps: APP13 dropped, but descriptive datasets should keep it")
+	}
+	for _, gone := range []string{"Berlin", "Germany", "US-CA"} {
+		if bytes.Contains(app13, []byte(gone)) {
+			t.Errorf("no-gps: location value %q still present in APP13", gone)
+		}
+	}
+	for _, keep := range []string{"Jane Photographer", "A caption"} {
+		if !bytes.Contains(app13, []byte(keep)) {
+			t.Errorf("no-gps: descriptive value %q was removed from APP13", keep)
+		}
+	}
+	// Rebuilt APP13 must remain structurally valid IPTC.
+	d, err := iptc.Parse(app13)
+	if err != nil {
+		t.Fatalf("no-gps: rebuilt APP13 does not parse: %v", err)
+	}
+	if n := len(d.Datasets()); n != 2 {
+		t.Errorf("no-gps: expected 2 surviving datasets, got %d", n)
+	}
+}
+
+func TestNoGPS_DropsEmptyIPTCSegment(t *testing.T) {
+	var b jpegBuilder
+	b.add(0xE0, app0())
+	b.add(0xED, photoshopAPP13( // location-only IPTC
+		iimDataset(2, 90, "Berlin"),
+		iimDataset(2, 101, "Germany"),
+	))
+	b.add(0xC0, sof0())
+
+	out := stripTo(t, b.bytes(), LevelNoGPS)
+
+	if hasMarker(out, 0xED) {
+		t.Error("no-gps: APP13 carrying only location data should be dropped entirely")
+	}
+}
+
+func TestNoGPS_PreservesNonPhotoshopAPP13(t *testing.T) {
+	var b jpegBuilder
+	b.add(0xE0, app0())
+	weird := []byte("AdobeCMResource-not-a-photoshop-block")
+	b.add(0xED, weird)
+	b.add(0xC0, sof0())
+
+	out := stripTo(t, b.bytes(), LevelNoGPS)
+
+	if got := findSegment(out, 0xED); !bytes.Equal(got, weird) {
+		t.Error("no-gps: non-Photoshop APP13 should pass through unchanged")
+	}
+}
+
+func TestNoGPS_StripsXMPLocation(t *testing.T) {
+	var b jpegBuilder
+	b.add(0xE0, app0())
+	payload := xmpLocationPayload()
+	b.add(0xE1, payload)
+	b.add(0xC0, sof0())
+
+	out := stripTo(t, b.bytes(), LevelNoGPS)
+
+	// Unlike no-camera, no-gps keeps the XMP segment and only blanks location.
+	xmpSeg := findSegment(out, 0xE1)
+	if xmpSeg == nil {
+		t.Fatal("no-gps: XMP APP1 dropped; it should be kept with location blanked")
+	}
+	for _, gone := range []string{"52,31.5N", "13,24.3E", "Berlin"} {
+		if bytes.Contains(xmpSeg, []byte(gone)) {
+			t.Errorf("no-gps: XMP location value %q survived", gone)
+		}
+	}
+	if !bytes.Contains(xmpSeg, []byte("Adobe Lightroom Classic 13.0")) {
+		t.Error("no-gps: non-location XMP field (CreatorTool) should be preserved")
+	}
+	if len(xmpSeg) != len(payload) {
+		t.Errorf("no-gps: XMP length not preserved: got %d, want %d", len(xmpSeg), len(payload))
 	}
 }
 
