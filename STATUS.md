@@ -1,6 +1,6 @@
 # Status
 
-*Last updated: 2026-06-25*
+*Last updated: 2026-07-01*
 
 | Field | Value |
 |:--|:--|
@@ -8,8 +8,8 @@
 | Version | v0.1.0 |
 | Build | passing |
 | Tests | passing (`internal/strip`, `internal/rename`) |
-| Deployed | v0.1.0 binaries built in `dist/` (Linux + Windows) |
-| Blocker | confirm v0.1.0 Codeberg release is published with binaries attached |
+| Deployed | v0.1.0 published on [Codeberg Releases](https://codeberg.org/elkarrde/lapis/releases/tag/v0.1.0) (2026-05-22) with binaries attached: `lapis-0.1.0` (Linux), `lapis-0.1.0.exe` (Windows) |
+| Blocker | none — v0.1.0 release confirmed live with binaries; next is `no-gps` IPTC/XMP location stripping (scoped) |
 
 ## Notes
 
