@@ -105,7 +105,7 @@ lapis --level no-camera --recursive ./archive
 
 ## Website
 
-[iso3200.org/lapis](https://iso3200.org/lapis/) — source at [github.com/elkarrde/lapis-web](https://github.com/elkarrde/lapis-web) (Hugo)
+[iso3200.org/lapis](https://iso3200.org/lapis/) — source at [github.com/elkarrde/lapis](https://github.com/elkarrde/lapis)
 
 ---
 
