@@ -71,5 +71,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The shipped binary is a single self-contained executable with no run-time
   dependencies; at this release `go.mod` had zero `require` entries.
 
-[0.2.0]: https://codeberg.org/elkarrde/lapis/releases/tag/v0.2.0
-[0.1.0]: https://codeberg.org/elkarrde/lapis/releases/tag/v0.1.0
+[0.2.0]: https://github.com/elkarrde/lapis/releases/tag/v0.2.0
+[0.1.0]: https://github.com/elkarrde/lapis/releases/tag/v0.1.0
