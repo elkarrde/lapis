@@ -1,8 +1,25 @@
 # TODO
 
-## Next release
+## Next release — v0.3.0 (proposed, not yet decided)
 
-- [ ] Tag a new release (bump `version` in `cmd/lapis/main.go`). Needed for the GitHub move: `v0.1.0`/`v0.2.0` declare the old `codeberg.org/elkarrde/lapis` module path, so `go install github.com/elkarrde/lapis/cmd/lapis@latest` only works from the next tag on.
+Suggestion: ship what is already on `main` as a maintenance release, and leave the v1.5
+features for later releases. **v0.3.0** rather than v0.2.1, because the module path change
+affects `go install` users and a minor-version bump is the usual pre-1.0 signal.
+
+Already on `main` since v0.2.0:
+- Module path moved to `github.com/elkarrde/lapis` (`9a9d067`) — the reason for the release
+- Linux `ctime` note when `--time` is used (`54c25e4`)
+
+Release steps:
+- [ ] Decide: ship now as v0.3.0, or pull in some v1.5 items first (mimic rename, `--time-set`, macOS binary, Windows `.exe` icon)
+- [x] `CHANGELOG.md`: `[Unreleased]` covers the module path move and the ctime note
+- [ ] Bump `version` in `cmd/lapis/main.go`; turn `[Unreleased]` into `[0.3.0]` with the date and a link
+- [ ] Build `dist/lapis-0.3.0` (Linux) and `dist/lapis-0.3.0.exe` (Windows); `GOPROXY=off go test ./...` first
+- [ ] Tag `v0.3.0` and publish a GitHub Release with both binaries. This makes `go install github.com/elkarrde/lapis/cmd/lapis@latest` work (`v0.1.0`/`v0.2.0` declare the old `codeberg.org/elkarrde/lapis` module path)
+- [ ] lapis-web: bump `[params].version` in `hugo.toml`, rebuild (`rm -rf public && hugo --minify`), user uploads `public/` to `iso3200.org/lapis/`
+- [ ] Update `STATUS.md` (both repos)
+
+Codeberg: left as it is for now (pointer README, last synced at `d1bce71`) until a decision is made — push releases to GitHub only.
 
 ---
 

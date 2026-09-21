@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- On Linux, `--time` now prints a one-time note to stderr: the inode change
+  time (`ctime`) cannot be set from userspace and will show when lapis ran.
+
 ### Changed
 - Project moved to GitHub: the module path is now `github.com/elkarrde/lapis`
   (was `codeberg.org/elkarrde/lapis`). The `exifscalpel` dependency stays on
