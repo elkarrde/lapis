@@ -179,3 +179,14 @@ func TestInterleave(t *testing.T) {
 		})
 	}
 }
+
+func TestCtimeNote(t *testing.T) {
+	if note := ctimeNote("linux"); !strings.Contains(note, "ctime") {
+		t.Errorf("ctimeNote(linux) = %q, want a note mentioning ctime", note)
+	}
+	for _, goos := range []string{"windows", "darwin"} {
+		if note := ctimeNote(goos); note != "" {
+			t.Errorf("ctimeNote(%s) = %q, want empty", goos, note)
+		}
+	}
+}

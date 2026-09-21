@@ -110,7 +110,7 @@ The `--time` flag takes a value: `random`, `shift`, or `now`.
 
 The chosen time is applied to **both** the filesystem (`os.Chtimes`) and any surviving EXIF DateTime field. The CLI picks the time once (`timestamp.Pick`) before stripping and passes it to `Strip` as `exifTime *time.Time`; `setEXIFDateTimes` (in `internal/strip/exif.go`) overwrites only the DateTime fields the level kept — DateTime (`0x0132`), DateTimeOriginal (`0x9003`), DateTimeDigitized (`0x9004`) — and never adds one the source lacked or a level just stripped (so at `no-camera` only DateTimeOriginal is rewritten; at `clean` there is no EXIF to touch). The format is EXIF's ASCII `YYYY:MM:DD HH:MM:SS` + NUL.
 
-Windows creation time is set via `syscall.CreateFile` + `SetFileTime` behind `//go:build windows` (`creationtime_windows.go`); `creationtime_other.go` (`//go:build !windows`) is a no-op so `Apply` is one cross-platform call. Standard `syscall` only — no run-time dependency. Verify the Windows path compiles with `GOOS=windows go build ./...` / `go vet`.
+Windows creation time is set via `syscall.CreateFile` + `SetFileTime` behind `//go:build windows` (`creationtime_windows.go`); `creationtime_other.go` (`//go:build !windows`) is a no-op so `Apply` is one cross-platform call. On Linux, where ctime cannot be set, the CLI prints a one-time note to stderr when `--time` is used (`ctimeNote` in `cmd/lapis/main.go`). Standard `syscall` only — no run-time dependency. Verify the Windows path compiles with `GOOS=windows go build ./...` / `go vet`.
 
 ## CLI flags
 

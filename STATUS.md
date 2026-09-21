@@ -1,6 +1,6 @@
 # Status
 
-*Last updated: 2026-09-20*
+*Last updated: 2026-09-22*
 
 | Field | Value |
 |:--|:--|
@@ -9,7 +9,7 @@
 | Build | passing (`GOPROXY=off go build ./...`; Windows cross-compile OK) |
 | Tests | passing (`cmd/lapis`, `internal/strip`, `internal/rename`, `internal/timestamp`) |
 | Deployed | v0.2.0 published on [GitHub Releases](https://github.com/elkarrde/lapis/releases/tag/v0.2.0) (originally on Codeberg) (2026-07-02) with `lapis-0.2.0` (Linux) and `lapis-0.2.0.exe` (Windows) attached; v0.1.0 likewise (2026-05-22) |
-| Blocker | none for the tool. `lapis-web` is still not deployed, so nothing public points at these downloads |
+| Blocker | none. Site live at <https://iso3200.org/lapis/> (2026-09-22), linking to the GitHub releases |
 
 ## Notes
 

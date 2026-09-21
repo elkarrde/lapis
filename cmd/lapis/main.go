@@ -99,6 +99,9 @@ func main() {
 			var shiftOnce time.Duration
 			tsOpts.Shift = &shiftOnce
 		}
+		if note := ctimeNote(runtime.GOOS); note != "" {
+			fmt.Fprintln(os.Stderr, note)
+		}
 	}
 
 	opts := options{
@@ -125,6 +128,17 @@ func main() {
 		die(1)
 	}
 	die(0)
+}
+
+// ctimeNote returns the once-per-run note printed when --time is used on Linux,
+// where the inode change time (ctime) cannot be set from userspace; it returns ""
+// on every other platform.
+func ctimeNote(goos string) string {
+	if goos != "linux" {
+		return ""
+	}
+	return "lapis: note: --time sets modification and access times. On Linux the change time (ctime)\n" +
+		"      cannot be set from userspace and will show when lapis ran (a kernel limitation)."
 }
 
 // normaliseArgs converts Windows-style /flag and /flag=value tokens to --flag so
