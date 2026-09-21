@@ -36,7 +36,7 @@
 - [x] `--time now`: set to `time.Now()`
 - [x] Apply chosen timestamp to surviving EXIF DateTime fields (DateTimeOriginal etc.)
 - [x] Windows creation time: `syscall.CreateFile` + `SetFileTime` behind `//go:build windows`
-- [ ] Document Linux `ctime` limitation in tool output — **not done**: only code comments and README mention it, and README ("This is documented in tool output") claims otherwise
+- [x] Document Linux `ctime` limitation in tool output (`ctimeNote`: printed once to stderr when `--time` is used on Linux)
 
 ### `cmd/lapis/main.go` — CLI
 - [x] Flag definitions: `--level`, `--rename`, `--time`, `--time-range-start`, `--time-range-end`, `--in-place`, `--recursive`, `--verbose`, `--version`, `--reencode`
