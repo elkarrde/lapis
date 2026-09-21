@@ -19,7 +19,7 @@ GOOS=windows GOARCH=amd64 go build -o lapis.exe ./cmd/lapis  # cross-compile
 
 ## Module
 
-`codeberg.org/elkarrde/lapis` — Go 1.22+. The binding rule is **no run-time dependencies**: a built `lapis` must be a single self-contained executable that needs nothing but itself (no installs, shared libs, or external tools). This is about the *shipped binary*, not the dependency list — lapis now has one `require` (the first-party, pure-Go `codeberg.org/elkarrde/exifscalpel`), which statically links into the same one file, so the run-time goal still holds. (The old "zero `require` entries" proxy no longer applies; judge by the binary, not by `go.mod`.)
+`github.com/elkarrde/lapis` — Go 1.22+. (Source lives on GitHub; the one dependency, `exifscalpel`, deliberately stays on Codeberg under its `codeberg.org/...` path.) The binding rule is **no run-time dependencies**: a built `lapis` must be a single self-contained executable that needs nothing but itself (no installs, shared libs, or external tools). This is about the *shipped binary*, not the dependency list — lapis now has one `require` (the first-party, pure-Go `codeberg.org/elkarrde/exifscalpel`), which statically links into the same one file, so the run-time goal still holds. (The old "zero `require` entries" proxy no longer applies; judge by the binary, not by `go.mod`.)
 
 **Builds are vendored.** `vendor/` is committed, so `go build` / `go test` resolve offline from the repo alone — no module proxy, no sibling checkout. Verify self-containment with `GOPROXY=off go build ./...`. After bumping the exifscalpel version in `go.mod`, re-run `go mod vendor` and commit the result.
 

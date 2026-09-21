@@ -1,4 +1,4 @@
-module codeberg.org/elkarrde/lapis
+module github.com/elkarrde/lapis
 
 go 1.22
 

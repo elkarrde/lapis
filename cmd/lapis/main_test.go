@@ -17,8 +17,8 @@ import (
 
 	"codeberg.org/elkarrde/exifscalpel/jpeg"
 
-	"codeberg.org/elkarrde/lapis/internal/rename"
-	"codeberg.org/elkarrde/lapis/internal/strip"
+	"github.com/elkarrde/lapis/internal/rename"
+	"github.com/elkarrde/lapis/internal/strip"
 )
 
 // writeTestJPEG writes a minimal valid JPEG to path: SOI + APP0 + optional COM

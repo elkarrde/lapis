@@ -5,6 +5,13 @@ All notable changes to **lapis** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Project moved to GitHub: the module path is now `github.com/elkarrde/lapis`
+  (was `codeberg.org/elkarrde/lapis`). The `exifscalpel` dependency stays on
+  Codeberg at `codeberg.org/elkarrde/exifscalpel`.
+
 ## [0.2.0] - 2026-07-02
 
 ### Added

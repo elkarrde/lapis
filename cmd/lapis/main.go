@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/elkarrde/lapis/internal/rename"
-	"codeberg.org/elkarrde/lapis/internal/strip"
-	"codeberg.org/elkarrde/lapis/internal/timestamp"
+	"github.com/elkarrde/lapis/internal/rename"
+	"github.com/elkarrde/lapis/internal/strip"
+	"github.com/elkarrde/lapis/internal/timestamp"
 )
 
 const version = "0.2.0"
