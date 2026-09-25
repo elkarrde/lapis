@@ -91,6 +91,8 @@ Codeberg: left as it is for now (pointer README, last synced at `d1bce71`) until
 - [x] Windows binary (shipped since v0.1.0)
 - [ ] Windows `.exe` icon + version info: generate `cmd/lapis/rsrc_windows_amd64.syso` (auto-linked by Go, Windows-only; commit it so offline builds keep working) with [go-winres](https://github.com/tc-hib/go-winres) (0BSD, dev-time only: `go run github.com/tc-hib/go-winres@v0.3.3 …`). Icon: rounded-square `logo-bg.svg` from `lapis-web/static/img/` (the plain outline is too faint at 16px), rendered with Inkscape at 16/32/48/256. Regenerate the `.syso` each release so the Properties version matches. Linux ELF has no embedded icon — nothing to do there.
 - [ ] macOS binary
+- [ ] Windows right-click / Send to integration (dual-use exe) and an in-browser WASM version — planned, not scheduled; see `FUTURE.md`
+- [ ] Check what survives in the opaque tail: `jpeg.Parse` stops at the first SOS and `Strip` writes everything after it verbatim at every level, `clean` included — data after EOI (Google Motion Photo MP4, Samsung trailer, …) and marker segments between progressive scans. Test real phone files; if any carry identifying data, drop it (at least at `clean`). See `FUTURE.md` §"Observation to follow up"
 
 ---
 
