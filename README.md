@@ -2,6 +2,12 @@
   <img src="lapis-logo.svg" width="64" height="64" alt="lapis logo">
 </p>
 
+> [!IMPORTANT]
+> **lapis has moved to GitHub: <https://github.com/elkarrde/lapis>**
+>
+> This Codeberg repository is no longer updated. New code, issues and releases
+> are on GitHub. The module path is now `github.com/elkarrde/lapis`.
+
 # Lapis
 
 CLI tool for stripping identifying metadata from photos and image files.
